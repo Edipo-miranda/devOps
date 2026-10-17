@@ -1,0 +1,170 @@
+# Controle de Aluguéis
+
+Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e inquilinos.
+
+- **Frontend:** React + TypeScript + Vite
+- **Banco de dados e login:** Supabase (PostgreSQL + Supabase Auth)
+- **Publicação:** Vercel (plano gratuito)
+
+> **Situação atual: Etapa 1 concluída** — estrutura do projeto, banco de dados, segurança (RLS),
+> login e uma tela de verificação da conexão. As telas Dashboard, Imóveis e Recebimentos são a Etapa 2.
+
+---
+
+## 1. Estrutura do projeto
+
+```
+├── supabase/
+│   ├── migrations/0001_schema_inicial.sql   ← cria tabelas, regras, segurança e funções
+│   └── tests/0001_verificar_banco.sql       ← testa o banco e apaga tudo que criou
+├── src/
+│   ├── lib/supabase.ts       ← conexão com o Supabase (só chave pública)
+│   ├── lib/erros.ts          ← traduz erros para mensagens em português
+│   ├── auth/                 ← controle de login (sessão do usuário)
+│   ├── components/Layout.tsx ← topo e menu de navegação
+│   ├── pages/                ← uma tela por arquivo
+│   ├── types/database.ts     ← formato dos dados de cada tabela
+│   └── styles/index.css      ← visual do aplicativo
+├── .env.example              ← modelo das variáveis de ambiente
+├── vercel.json               ← configuração para a Vercel
+└── package.json              ← dependências e comandos
+```
+
+## 2. Modelo do banco de dados
+
+```
+ imoveis ─┐                          ┌─ inquilinos
+          │ 1                      1 │
+          └──────► locacoes ◄────────┘      (histórico de ocupações)
+                      │ 1
+                      ▼ N
+                 recebimentos               (um por locação por mês)
+```
+
+| Tabela | Para que serve | Campos principais |
+|---|---|---|
+| `imoveis` | Cada imóvel | identificação, endereço, ativo (sim/não) |
+| `inquilinos` | Cada pessoa que aluga | nome, telefone (opcional) |
+| `locacoes` | "Fulano ocupa o imóvel X desde a data Y" | data de entrada, data de saída, **valor atual do aluguel**, dia de vencimento, situação (`ativa`/`encerrada`) |
+| `recebimentos` | Cobrança de um mês | mês de referência, **valor previsto**, **vencimento**, valor recebido, data do pagamento |
+
+**Regras garantidas pelo próprio banco** (mesmo que alguém tente burlar o aplicativo):
+
+- Não existe recebimento duplicado para a mesma locação e o mesmo mês (`unique (locacao_id, mes_referencia)`).
+- Cada recebimento guarda uma **cópia** do valor e do vencimento. Mudar o valor do aluguel na locação
+  **não altera** os meses já lançados; só os meses gerados depois usam o novo valor.
+- Um imóvel só pode ter **uma** locação ativa por vez. Quando o inquilino sai, a locação é encerrada
+  (com data de saída) e fica no histórico; o próximo inquilino recebe uma locação nova.
+- Nada é apagado pelo aplicativo: imóveis são **desativados**, locações são **encerradas**.
+- Valor recebido e data do pagamento são preenchidos sempre juntos.
+- Mês de referência, locação e dono de um recebimento não podem ser trocados depois.
+- Vencimento no dia 31 em mês mais curto vira o último dia do mês (ex.: 28/02).
+- Não há cálculo automático de reajuste, juros ou multa.
+
+**Situação do recebimento** (calculada na view `vw_recebimentos`, com a data de hoje no fuso de Brasília):
+
+| Situação | Quando |
+|---|---|
+| Pago | pagamento registrado |
+| Atrasado | sem pagamento e a data de vencimento já passou |
+| Em aberto | sem pagamento e ainda dentro do prazo (inclui o próprio dia do vencimento) |
+
+**Funções no banco:**
+
+- `gerar_recebimentos_mes(ano, mes)` — cria os lançamentos do mês para todas as locações vigentes
+  naquele mês. Pode ser chamada várias vezes: só cria o que ainda não existe.
+- `resumo_mes(ano, mes)` — totais do Dashboard (previsto, recebido, pendente, atrasados).
+
+**Segurança (RLS):** cada usuário só vê e altera os próprios registros. Visitantes não logados não
+acessam nada. As chaves estrangeiras compostas impedem ligar um imóvel de um usuário a um inquilino
+de outro.
+
+---
+
+## 3. O que fazer agora (passo a passo)
+
+### Passo 1 — Instalar as ferramentas no seu computador
+
+1. Instale o **Node.js** versão 20 ou mais nova (LTS): <https://nodejs.org>.
+2. Instale o **Git**: <https://git-scm.com>.
+3. Baixe este repositório (`git clone ...`) e, dentro da pasta, rode:
+   ```bash
+   npm install
+   ```
+
+### Passo 2 — Criar o projeto no Supabase
+
+1. Acesse <https://supabase.com>, crie uma conta e clique em **New project**.
+2. Dê um nome, crie uma **senha do banco** forte (guarde-a) e escolha a região **South America (São Paulo)**.
+3. Aguarde o projeto ficar pronto (1–2 minutos).
+
+### Passo 3 — Criar as tabelas (executar o SQL)
+
+1. No menu lateral do Supabase, abra **SQL Editor** → **New query**.
+2. Abra o arquivo `supabase/migrations/0001_schema_inicial.sql`, copie **todo** o conteúdo, cole e clique em **Run**.
+3. Deve aparecer *Success. No rows returned*.
+
+### Passo 4 — Testar o banco
+
+1. Ainda no **SQL Editor**, abra uma nova query.
+2. Cole todo o conteúdo de `supabase/tests/0001_verificar_banco.sql` e clique em **Run**.
+3. O resultado deve ser uma tabela com **29 linhas "OK"**. O teste cria usuários temporários e apaga
+   tudo no final — nenhum dado de teste fica no banco.
+4. Se aparecer um erro começando com **FALHOU**, copie a mensagem e me envie.
+
+### Passo 5 — Criar o seu usuário de login
+
+1. Menu **Authentication** → **Users** → **Add user** → **Create new user**.
+2. Informe seu e-mail e uma senha (mínimo 6 caracteres) e marque **Auto Confirm User**.
+3. **Recomendado:** em **Authentication** → **Sign In / Providers**, desligue **Allow new users to sign up**.
+   Assim, ninguém mais consegue criar conta no seu aplicativo. (Mesmo que alguém crie, a RLS impede
+   que veja os seus dados.)
+
+### Passo 6 — Configurar as variáveis de ambiente
+
+1. No Supabase, abra **Project Settings** → **API Keys**. Copie a **Publishable key** (começa com
+   `sb_publishable_`). Se o seu projeto mostrar apenas as chaves antigas, use a **anon public**.
+2. Copie a **Project URL** (em **Project Settings** → **Data API**, ou no botão **Connect**). Formato:
+   `https://xxxxx.supabase.co`.
+3. Na pasta do projeto, copie o arquivo `.env.example` com o nome `.env.local` e preencha:
+   ```
+   VITE_SUPABASE_URL=https://xxxxx.supabase.co
+   VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+   ```
+
+> ⚠️ **Nunca** use a **Secret key** (`sb_secret_...`) nem a **service_role** no aplicativo.
+> Tudo que começa com `VITE_` vai para o navegador e qualquer pessoa pode ver. O aplicativo recusa
+> funcionar se detectar uma chave secreta. O arquivo `.env.local` já está no `.gitignore` e
+> não vai para o GitHub.
+
+### Passo 7 — Rodar e verificar a integração
+
+```bash
+npm run dev
+```
+
+Abra o endereço mostrado (normalmente <http://localhost:5173>), entre com o usuário do Passo 5 e veja a
+tela **Verificação da conexão**. Todos os itens devem aparecer como **OK**. Se algum der erro, a
+mensagem explica o motivo (ex.: SQL não executado, chave errada).
+
+**Me avise quando chegar aqui** — com a conexão confirmada, sigo para a Etapa 2 (telas).
+
+---
+
+## 4. Publicar na Vercel (quando o app estiver pronto)
+
+1. Envie o projeto para o GitHub.
+2. Em <https://vercel.com>, **Add New → Project**, importe o repositório (a Vercel detecta Vite).
+3. Em **Environment Variables**, cadastre `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`
+   (os mesmos valores do `.env.local`) e clique em **Deploy**.
+4. No Supabase, em **Authentication** → **URL Configuration**, coloque o endereço da Vercel em **Site URL**.
+
+O arquivo `vercel.json` faz as rotas do aplicativo (ex.: `/recebimentos`) funcionarem ao recarregar a página.
+
+## Comandos
+
+| Comando | O que faz |
+|---|---|
+| `npm run dev` | roda o app no seu computador |
+| `npm run build` | verifica os tipos e gera a versão de produção |
+| `npm run lint` | procura problemas no código |
