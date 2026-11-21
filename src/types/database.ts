@@ -34,8 +34,44 @@ export interface Locacao {
   valor_aluguel: number
   dia_vencimento: number
   situacao: SituacaoLocacao
+  prazo_meses: number | null // vazio = prazo indeterminado
+  data_inicio_contrato: string // início do contrato atual (muda ao renovar)
+  reajuste_meses: number | null // vazio = sem reajuste
+  indice_reajuste: string | null
+  data_ultimo_reajuste: string | null
   created_at: string
   updated_at: string
+}
+
+export interface Reajuste {
+  id: string
+  locacao_id: string
+  data_reajuste: string
+  valor_anterior: number
+  valor_novo: number
+  observacao: string | null
+  created_at: string
+}
+
+export type TipoAviso = 'parcela_atrasada' | 'parcela_hoje' | 'parcela_vencendo' | 'fim_contrato' | 'reajuste'
+
+/** Linha retornada pela função avisos(). */
+export interface Aviso {
+  tipo: TipoAviso
+  data_alvo: string
+  dias: number // dias até a data (negativo = já passou)
+  imovel_id: string
+  imovel: string
+  inquilino: string
+  locacao_id: string
+  recebimento_id: string | null
+  valor: number
+  detalhe: string | null
+}
+
+export interface Configuracoes {
+  dias_aviso_parcela: number
+  dias_aviso_contrato: number
 }
 
 export interface Recebimento {

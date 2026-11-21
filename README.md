@@ -18,8 +18,10 @@ Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e i
 ├── supabase/
 │   ├── migrations/0001_schema_inicial.sql   ← cria tabelas, regras, segurança e funções
 │   ├── migrations/0002_funcoes_cadastro.sql ← cadastro "tudo ou nada" e encerramento de locação
+│   ├── migrations/0003_contratos_avisos.sql ← prazo de contrato, reajustes e avisos
 │   ├── tests/0001_verificar_banco.sql       ← testa o banco e apaga tudo que criou
-│   └── tests/0002_verificar_funcoes_cadastro.sql
+│   ├── tests/0002_verificar_funcoes_cadastro.sql
+│   └── tests/0003_verificar_contratos_avisos.sql
 ├── src/
 │   ├── lib/supabase.ts       ← conexão com o Supabase (só chave pública)
 │   ├── lib/erros.ts          ← traduz erros para mensagens em português
@@ -177,6 +179,28 @@ mensagem explica o motivo (ex.: SQL não executado, chave errada).
 4. Rode `npm run dev`, entre e abra o link **Verificar conexão com o banco** (no rodapé): todos os itens OK,
    inclusive **Funções de cadastro (script 0002)**.
 
+## Atualizar para os avisos (contratos e reajustes)
+
+1. Com o app parado (**Ctrl + C**): `git pull` e depois `npm install`.
+2. No Supabase, **SQL Editor → New query**: cole todo o `supabase/migrations/0003_contratos_avisos.sql` → **Run** → *Success*.
+   (Se ainda não rodou o 0002, rode o 0002 antes.)
+3. Nova query: cole `supabase/tests/0003_verificar_contratos_avisos.sql` → **Run** → **11 linhas OK**.
+4. `npm run dev` → rodapé → **Verificar conexão com o banco**: tudo OK, inclusive **Avisos e reajustes (script 0003)**.
+5. Nas locações que você já cadastrou, abra o imóvel → **Editar locação** e preencha **Prazo do contrato**,
+   **Reajuste a cada**, **Início do contrato atual** e **Último reajuste em** (se já houve reajuste).
+   Locações cadastradas antes desta atualização ficam sem prazo e sem reajuste até você preencher.
+
+### Como funcionam os avisos
+
+- Aparecem **dentro do app**: no sino 🔔 do topo (com o número de avisos), no Dashboard e na tela **Avisos**.
+- **Parcela:** a partir de 3 dias antes do vencimento, no dia, e todos os dias enquanto estiver atrasada.
+  Some quando o pagamento é registrado.
+- **Fim do contrato:** 60 dias antes de completar o prazo (ex.: 12 meses). Some ao **renovar** (novo período),
+  ao marcar **prazo indeterminado** ou ao **encerrar** a locação.
+- **Reajuste:** 60 dias antes da data (último reajuste — ou a entrada — + periodicidade). Some ao **registrar o
+  reajuste**, informando o novo valor. O app **não calcula** índices; o histórico de reajustes fica guardado.
+- A antecedência (3 e 60 dias) pode ser alterada em **Configurações dos avisos** (rodapé).
+
 ## Roteiro de teste com dados reais
 
 Use os seus imóveis de verdade (não é preciso inventar dados). Siga na ordem e confira cada resultado:
@@ -193,6 +217,10 @@ Use os seus imóveis de verdade (não é preciso inventar dados). Siga na ordem 
 | 8 | Recebimentos → próximo mês → **Gerar lançamentos** | Novo mês usa o **novo** valor |
 | 9 | **Encerrar locação** e depois **+ Cadastrar inquilino** | O antigo vai para "Histórico de ocupações"; recebimentos antigos continuam |
 | 10 | Busca por parte do nome do inquilino ou do imóvel | Filtra a lista |
+| 11 | Edite uma locação com prazo 12 e reajuste 12, e **Início do contrato** há ~11 meses | Sino mostra avisos de contrato e reajuste |
+| 12 | **Registrar reajuste** com o novo valor | Aviso some; aparece em "Histórico de reajustes"; meses pagos não mudam |
+| 13 | **Renovar contrato** | Aviso de fim de contrato some; novo período aparece no imóvel |
+| 14 | Lançamento com vencimento em até 3 dias, sem pagamento | Aviso "A vencer"; após registrar pagamento, some |
 
 Um lançamento com vencimento já passado e sem pagamento aparece como **Atrasado** (data de Brasília).
 

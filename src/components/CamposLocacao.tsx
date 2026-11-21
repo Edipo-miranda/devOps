@@ -1,5 +1,5 @@
 import type { Inquilino } from '../types/database'
-import type { ErrosLocacao, ValoresLocacao } from '../lib/validacaoLocacao'
+import type { ErrosLocacao, ValoresContrato, ValoresLocacao } from '../lib/validacaoLocacao'
 
 interface Props {
   valores: ValoresLocacao
@@ -59,6 +59,8 @@ export function CamposLocacao({ valores, erros, inquilinos, aoMudar }: Props) {
           <input type="number" min={1} max={31} value={valores.dia} onChange={(e) => set('dia', e.target.value)} placeholder="10" />
         </Campo>
       </div>
+
+      <CamposContrato valores={valores} erros={erros} aoMudar={(c) => aoMudar({ ...valores, ...c })} />
     </>
   )
 }
@@ -72,5 +74,32 @@ export function Campo({ rotulo, dica, erro, children }: { rotulo: string; dica?:
       {children}
       {erro && <small className="campo__erro">{erro}</small>}
     </label>
+  )
+}
+
+/** Prazo do contrato e reajuste (usados no cadastro e na edição da locação). */
+export function CamposContrato({ valores, erros, aoMudar }: {
+  valores: ValoresContrato
+  erros: Partial<Record<keyof ValoresContrato, string>>
+  aoMudar: (v: ValoresContrato) => void
+}) {
+  const set = (k: keyof ValoresContrato, val: string) =>
+    aoMudar({ prazo: valores.prazo, reajuste: valores.reajuste, indice: valores.indice, [k]: val })
+
+  return (
+    <div className="grade-3">
+      <Campo rotulo="Prazo do contrato (meses)" dica="vazio = indeterminado" erro={erros.prazo}>
+        <input type="number" min={1} max={240} value={valores.prazo} onChange={(e) => set('prazo', e.target.value)} placeholder="12" />
+      </Campo>
+      <Campo rotulo="Reajuste a cada (meses)" dica="vazio = sem reajuste" erro={erros.reajuste}>
+        <input type="number" min={1} max={120} value={valores.reajuste} onChange={(e) => set('reajuste', e.target.value)} placeholder="12" />
+      </Campo>
+      <Campo rotulo="Índice do reajuste" dica="opcional" erro={erros.indice}>
+        <input value={valores.indice} onChange={(e) => set('indice', e.target.value)} maxLength={40} placeholder="IGP-M, IPCA…" list="indices-reajuste" />
+        <datalist id="indices-reajuste">
+          <option value="IGP-M" /><option value="IPCA" /><option value="INPC" /><option value="IVAR" />
+        </datalist>
+      </Campo>
+    </div>
   )
 }

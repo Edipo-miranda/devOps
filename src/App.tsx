@@ -9,6 +9,8 @@ import { DashboardPage } from './pages/DashboardPage'
 import { ImoveisPage } from './pages/ImoveisPage'
 import { ImovelDetalhePage } from './pages/ImovelDetalhePage'
 import { RecebimentosPage } from './pages/RecebimentosPage'
+import { AvisosPage } from './pages/AvisosPage'
+import { ConfiguracoesPage } from './pages/ConfiguracoesPage'
 
 export default function App() {
   if (erroConfiguracao) {
@@ -33,6 +35,8 @@ export default function App() {
             <Route path="imoveis" element={<ImoveisPage />} />
             <Route path="imoveis/:id" element={<ImovelDetalhePage />} />
             <Route path="recebimentos" element={<RecebimentosPage />} />
+            <Route path="avisos" element={<AvisosPage />} />
+            <Route path="configuracoes" element={<ConfiguracoesPage />} />
             <Route path="verificacao" element={<VerificacaoPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

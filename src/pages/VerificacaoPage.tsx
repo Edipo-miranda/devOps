@@ -62,6 +62,14 @@ export function VerificacaoPage() {
           },
     )
 
+    // Avisos, contratos e reajustes (0003_contratos_avisos.sql). Só leitura.
+    const { data: avisos, error: erroAvisos } = await supabase.rpc('avisos')
+    resultados.push(
+      erroAvisos
+        ? { nome: 'Avisos e reajustes (script 0003)', estado: 'erro', detalhe: mensagemDeErro(erroAvisos) }
+        : { nome: 'Avisos e reajustes (script 0003)', estado: 'ok', detalhe: `${(avisos as unknown[]).length} aviso(s) agora` },
+    )
+
     return resultados
   }, [])
 

@@ -1,12 +1,28 @@
 import { useCallback, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Aviso, type AvisoDados } from '../components/Aviso'
 import { FormImovel } from '../components/FormImovel'
-import { FormEditarInquilino, FormEditarLocacao, FormEncerrarLocacao, FormNovaLocacao } from '../components/FormsLocacao'
+import {
+  FormEditarInquilino,
+  FormEditarLocacao,
+  FormEncerrarLocacao,
+  FormNovaLocacao,
+  FormReajuste,
+  FormRenovarContrato,
+} from '../components/FormsLocacao'
 import { TabelaRecebimentos } from '../components/TabelaRecebimentos'
-import { buscarImovel, definirImovelAtivo, garantirMesAtual, listarRecebimentosDoImovel, type LocacaoComInquilino } from '../lib/api'
+import {
+  buscarImovel,
+  definirImovelAtivo,
+  fimDoContrato,
+  garantirMesAtual,
+  listarReajustes,
+  listarRecebimentosDoImovel,
+  proximoReajuste,
+  type LocacaoComInquilino,
+} from '../lib/api'
 import { mensagemDeErro } from '../lib/erros'
-import { formatarData, formatarMoeda } from '../lib/format'
+import { diasEntre, formatarData, formatarMoeda, hojeBrasil } from '../lib/format'
 import { useCarregar } from '../lib/useCarregar'
 import type { Inquilino } from '../types/database'
 
@@ -16,10 +32,21 @@ type Janela =
   | { tipo: 'editar-locacao'; locacao: LocacaoComInquilino }
   | { tipo: 'encerrar'; locacao: LocacaoComInquilino }
   | { tipo: 'inquilino'; inquilino: Inquilino }
+  | { tipo: 'reajuste'; locacao: LocacaoComInquilino }
+  | { tipo: 'renovar'; locacao: LocacaoComInquilino }
   | null
+
+/** "em 15 dias", "hoje", "há 3 dias" — distância de uma data até hoje. */
+function prazoRelativo(data: string): string {
+  const d = diasEntre(hojeBrasil(), data)
+  if (d === 0) return 'hoje'
+  const n = Math.abs(d)
+  return d > 0 ? `em ${n} ${n === 1 ? 'dia' : 'dias'}` : `há ${n} ${n === 1 ? 'dia' : 'dias'}`
+}
 
 export function ImovelDetalhePage() {
   const { id = '' } = useParams()
+  const [params, setParams] = useSearchParams()
   const [janela, setJanela] = useState<Janela>(null)
   const [aviso, setAviso] = useState<AvisoDados | null>(null)
   const fecharAviso = useCallback(() => setAviso(null), [])
@@ -27,11 +54,24 @@ export function ImovelDetalhePage() {
   const { dados, erro, recarregar } = useCarregar(async () => {
     await garantirMesAtual().catch(() => 0)
     const [detalhe, recebimentos] = await Promise.all([buscarImovel(id), listarRecebimentosDoImovel(id)])
-    return { ...detalhe, recebimentos }
+    const reajustes = await listarReajustes(detalhe.locacoes.map((l) => l.id))
+    return { ...detalhe, recebimentos, reajustes }
   }, [id])
 
-  function concluido(texto: string) {
+  // Vindo de um aviso (?acao=reajuste ou ?acao=renovar), abre a janela correspondente.
+  const acao = params.get('acao')
+  const locacaoAtiva = dados?.locacoes.find((l) => l.situacao === 'ativa') ?? null
+  const janelaDoAviso: Janela =
+    locacaoAtiva && (acao === 'reajuste' || acao === 'renovar') ? { tipo: acao, locacao: locacaoAtiva } : null
+  const janelaAberta = janela ?? janelaDoAviso
+
+  function fecharJanela() {
     setJanela(null)
+    if (acao) setParams({}, { replace: true })
+  }
+
+  function concluido(texto: string) {
+    fecharJanela()
     setAviso({ tipo: 'ok', texto })
     recarregar()
   }
@@ -58,8 +98,12 @@ export function ImovelDetalhePage() {
   }
   if (!dados) return <p className="texto-suave">Carregando…</p>
 
-  const { imovel, locacoes, recebimentos } = dados
-  const ativa = locacoes.find((l) => l.situacao === 'ativa') ?? null
+  const { imovel, locacoes, recebimentos, reajustes } = dados
+  const ativa = locacaoAtiva
+  const fim = ativa ? fimDoContrato(ativa) : null
+  const reajusteEm = ativa ? proximoReajuste(ativa) : null
+  const hoje = hojeBrasil()
+  const nomeInquilino = new Map(locacoes.map((l) => [l.id, l.inquilino.nome]))
   const anteriores = locacoes.filter((l) => l.situacao !== 'ativa')
 
   return (
@@ -86,7 +130,7 @@ export function ImovelDetalhePage() {
           <h2>Locação atual</h2>
           {ativa ? (
             <div className="grupo-botoes">
-              <button className="botao botao--pequeno" onClick={() => setJanela({ tipo: 'editar-locacao', locacao: ativa })}>Editar valor/vencimento</button>
+              <button className="botao botao--pequeno" onClick={() => setJanela({ tipo: 'editar-locacao', locacao: ativa })}>Editar locação</button>
               <button className="botao botao--pequeno" onClick={() => setJanela({ tipo: 'inquilino', inquilino: ativa.inquilino })}>Editar inquilino</button>
               <button className="botao botao--pequeno botao--discreto" onClick={() => setJanela({ tipo: 'encerrar', locacao: ativa })}>Encerrar locação</button>
             </div>
@@ -105,6 +149,40 @@ export function ImovelDetalhePage() {
             <div><dt>Vencimento</dt><dd>Todo dia {ativa.dia_vencimento}</dd></div>
             <div><dt>Situação</dt><dd><span className="selo selo--pago">Ativa</span></dd></div>
           </dl>
+        ) : null}
+        {ativa ? (
+          <div className="contrato">
+            <div className="cartao__topo">
+              <h3>Contrato e reajuste</h3>
+              <div className="grupo-botoes">
+                {ativa.reajuste_meses && (
+                  <button className="botao botao--pequeno" onClick={() => setJanela({ tipo: 'reajuste', locacao: ativa })}>Registrar reajuste</button>
+                )}
+                {ativa.prazo_meses && (
+                  <button className="botao botao--pequeno" onClick={() => setJanela({ tipo: 'renovar', locacao: ativa })}>Renovar contrato</button>
+                )}
+              </div>
+            </div>
+            <dl className="dados-grade">
+              <div><dt>Prazo</dt><dd>{ativa.prazo_meses ? `${ativa.prazo_meses} meses` : 'Indeterminado'}</dd></div>
+              <div><dt>Contrato atual</dt><dd>{formatarData(ativa.data_inicio_contrato)}{fim ? ` até ${formatarData(fim)}` : ''}</dd></div>
+              <div>
+                <dt>Fim do contrato</dt>
+                <dd className={fim && fim <= hoje ? 'texto-erro' : ''}>{fim ? `${formatarData(fim)} (${prazoRelativo(fim)})` : '—'}</dd>
+              </div>
+              <div><dt>Reajuste</dt><dd>{ativa.reajuste_meses ? `A cada ${ativa.reajuste_meses} meses${ativa.indice_reajuste ? ` · ${ativa.indice_reajuste}` : ''}` : 'Sem reajuste'}</dd></div>
+              <div><dt>Último reajuste</dt><dd>{formatarData(ativa.data_ultimo_reajuste)}</dd></div>
+              <div>
+                <dt>Próximo reajuste</dt>
+                <dd className={reajusteEm && reajusteEm <= hoje ? 'texto-erro' : ''}>{reajusteEm ? `${formatarData(reajusteEm)} (${prazoRelativo(reajusteEm)})` : '—'}</dd>
+              </div>
+            </dl>
+            {!ativa.prazo_meses && !ativa.reajuste_meses && (
+              <p className="texto-suave texto-pequeno">
+                Para receber avisos de fim de contrato e de reajuste, informe o prazo e a periodicidade em “Editar locação”.
+              </p>
+            )}
+          </div>
         ) : (
           <p className="texto-suave">
             {imovel.ativo ? 'Imóvel vago. Cadastre um inquilino para começar a gerar os lançamentos.' : 'Imóvel desativado. Reative-o para cadastrar um inquilino.'}
@@ -139,6 +217,34 @@ export function ImovelDetalhePage() {
         </div>
       )}
 
+      {reajustes.length > 0 && (
+        <>
+          <h2 className="titulo-secao">Histórico de reajustes</h2>
+          <div className="tabela-container">
+            <table className="tabela tabela--responsiva">
+              <thead>
+                <tr><th>Data</th><th>Inquilino</th><th className="num">Valor anterior</th><th className="num">Novo valor</th><th className="num">Variação</th><th>Observação</th></tr>
+              </thead>
+              <tbody>
+                {reajustes.map((r) => {
+                  const variacao = ((Number(r.valor_novo) - Number(r.valor_anterior)) / Number(r.valor_anterior)) * 100
+                  return (
+                    <tr key={r.id}>
+                      <td data-rotulo="Data">{formatarData(r.data_reajuste)}</td>
+                      <td data-rotulo="Inquilino">{nomeInquilino.get(r.locacao_id)}</td>
+                      <td data-rotulo="Valor anterior" className="num">{formatarMoeda(r.valor_anterior)}</td>
+                      <td data-rotulo="Novo valor" className="num destaque">{formatarMoeda(r.valor_novo)}</td>
+                      <td data-rotulo="Variação" className="num">{variacao.toLocaleString('pt-BR', { maximumFractionDigits: 2, signDisplay: 'always' })}%</td>
+                      <td data-rotulo="Observação">{r.observacao ?? '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       <h2 className="titulo-secao">Recebimentos deste imóvel</h2>
       {recebimentos.length === 0 ? (
         <p className="vazio">Nenhum lançamento ainda.</p>
@@ -154,24 +260,34 @@ export function ImovelDetalhePage() {
         />
       )}
 
-      {janela?.tipo === 'imovel' && (
-        <FormImovel imovel={imovel} aoFechar={() => setJanela(null)} aoSalvar={() => concluido('Imóvel atualizado.')} />
+      {janelaAberta?.tipo === 'imovel' && (
+        <FormImovel imovel={imovel} aoFechar={() => fecharJanela()} aoSalvar={() => concluido('Imóvel atualizado.')} />
       )}
-      {janela?.tipo === 'nova-locacao' && (
-        <FormNovaLocacao imovelId={imovel.id} aoFechar={() => setJanela(null)} aoSalvar={() => concluido('Inquilino cadastrado.')} />
+      {janelaAberta?.tipo === 'nova-locacao' && (
+        <FormNovaLocacao imovelId={imovel.id} aoFechar={() => fecharJanela()} aoSalvar={() => concluido('Inquilino cadastrado.')} />
       )}
-      {janela?.tipo === 'editar-locacao' && (
-        <FormEditarLocacao locacao={janela.locacao} aoFechar={() => setJanela(null)} aoSalvar={() => concluido('Locação atualizada.')} />
+      {janelaAberta?.tipo === 'editar-locacao' && (
+        <FormEditarLocacao locacao={janelaAberta.locacao} aoFechar={() => fecharJanela()} aoSalvar={() => concluido('Locação atualizada.')} />
       )}
-      {janela?.tipo === 'encerrar' && (
+      {janelaAberta?.tipo === 'encerrar' && (
         <FormEncerrarLocacao
-          locacao={janela.locacao}
-          aoFechar={() => setJanela(null)}
+          locacao={janelaAberta.locacao}
+          aoFechar={() => fecharJanela()}
           aoSalvar={(n) => concluido(n > 0 ? `Locação encerrada. ${n} lançamento(s) futuro(s) sem pagamento removido(s).` : 'Locação encerrada.')}
         />
       )}
-      {janela?.tipo === 'inquilino' && (
-        <FormEditarInquilino inquilino={janela.inquilino} aoFechar={() => setJanela(null)} aoSalvar={() => concluido('Inquilino atualizado.')} />
+      {janelaAberta?.tipo === 'reajuste' && (
+        <FormReajuste
+          locacao={janelaAberta.locacao}
+          aoFechar={() => fecharJanela()}
+          aoSalvar={(n) => concluido(n > 0 ? `Reajuste registrado. ${n} lançamento(s) em aberto atualizado(s).` : 'Reajuste registrado.')}
+        />
+      )}
+      {janelaAberta?.tipo === 'renovar' && (
+        <FormRenovarContrato locacao={janelaAberta.locacao} aoFechar={() => fecharJanela()} aoSalvar={concluido} />
+      )}
+      {janelaAberta?.tipo === 'inquilino' && (
+        <FormEditarInquilino inquilino={janelaAberta.inquilino} aoFechar={() => fecharJanela()} aoSalvar={() => concluido('Inquilino atualizado.')} />
       )}
 
       <Aviso aviso={aviso} aoFechar={fecharAviso} />

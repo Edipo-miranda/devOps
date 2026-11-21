@@ -9,12 +9,16 @@ export interface ValoresLocacao {
   dataEntrada: string
   valor: string
   dia: string
+  prazo: string // meses; vazio = indeterminado
+  reajuste: string // meses; vazio = sem reajuste
+  indice: string
 }
 
 export type ErrosLocacao = Partial<Record<keyof ValoresLocacao, string>>
 
 export function valoresLocacaoIniciais(): ValoresLocacao {
-  return { modoInquilino: 'novo', inquilinoId: '', nome: '', telefone: '', dataEntrada: hojeBrasil(), valor: '', dia: '' }
+  return { modoInquilino: 'novo', inquilinoId: '', nome: '', telefone: '', dataEntrada: hojeBrasil(), valor: '', dia: '',
+    prazo: '12', reajuste: '12', indice: '' }
 }
 
 /** Valida os campos. Retorna os erros encontrados e, se não houver, os dados prontos para gravar. */
@@ -40,6 +44,9 @@ export function validarLocacao(v: ValoresLocacao): { erros: ErrosLocacao; dados:
   const dia = Number(v.dia)
   if (!Number.isInteger(dia) || dia < 1 || dia > 31) erros.dia = 'Informe um dia entre 1 e 31.'
 
+  const contrato = validarContrato(v)
+  Object.assign(erros, contrato.erros)
+
   if (Object.keys(erros).length) return { erros, dados: null }
   return {
     erros,
@@ -50,6 +57,33 @@ export function validarLocacao(v: ValoresLocacao): { erros: ErrosLocacao; dados:
       data_entrada: v.dataEntrada,
       valor_aluguel: valor!,
       dia_vencimento: dia,
+      prazo_meses: contrato.prazo,
+      reajuste_meses: contrato.reajuste,
+      indice_reajuste: contrato.indice,
     },
   }
+}
+
+/** Lê um número de meses opcional. Retorna undefined quando inválido. */
+function lerMeses(texto: string, maximo: number): number | null | undefined {
+  if (!texto.trim()) return null
+  const n = Number(texto)
+  return Number.isInteger(n) && n >= 1 && n <= maximo ? n : undefined
+}
+
+export interface ValoresContrato {
+  prazo: string
+  reajuste: string
+  indice: string
+}
+
+/** Valida prazo do contrato, periodicidade e índice do reajuste. */
+export function validarContrato(v: ValoresContrato) {
+  const erros: Partial<Record<keyof ValoresContrato, string>> = {}
+  const prazo = lerMeses(v.prazo, 240)
+  const reajuste = lerMeses(v.reajuste, 120)
+  if (prazo === undefined) erros.prazo = 'Informe de 1 a 240 meses, ou deixe vazio (indeterminado).'
+  if (reajuste === undefined) erros.reajuste = 'Informe de 1 a 120 meses, ou deixe vazio (sem reajuste).'
+  if (v.indice.trim().length > 40) erros.indice = 'Máximo de 40 caracteres.'
+  return { erros, prazo: prazo ?? null, reajuste: reajuste ?? null, indice: v.indice.trim() || null }
 }

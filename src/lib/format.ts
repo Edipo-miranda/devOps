@@ -65,5 +65,23 @@ export function valorParaCampo(valor: number | string | null | undefined): strin
   return Number(valor).toFixed(2).replace('.', ',')
 }
 
+/**
+ * Soma meses a uma data "AAAA-MM-DD", como o banco faz:
+ * se o dia não existir no mês final (ex.: 31/01 + 1 mês), usa o último dia do mês.
+ */
+export function adicionarMeses(data: string, meses: number): string {
+  const [a, m, d] = data.split('-').map(Number)
+  const total = a * 12 + (m - 1) + meses
+  const ano = Math.floor(total / 12)
+  const mes = (total % 12) + 1
+  const ultimoDia = new Date(Date.UTC(ano, mes, 0)).getUTCDate()
+  return `${ano}-${String(mes).padStart(2, '0')}-${String(Math.min(d, ultimoDia)).padStart(2, '0')}`
+}
+
+/** Diferença em dias entre duas datas "AAAA-MM-DD" (b - a). */
+export function diasEntre(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000)
+}
+
 export const REGEX_TELEFONE = /^[0-9()+ -]{8,20}$/
 export const REGEX_DATA = /^\d{4}-\d{2}-\d{2}$/

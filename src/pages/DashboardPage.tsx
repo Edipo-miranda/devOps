@@ -1,6 +1,10 @@
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { Aviso, type AvisoDados } from '../components/Aviso'
+import { ListaAvisos } from '../components/ListaAvisos'
+import { aoAlterarDados } from '../lib/eventos'
 import { FiltroPeriodo } from '../components/FiltroPeriodo'
-import { contarAtrasadosGeral, garantirMesAtual, listarRecebimentos, resumoMes } from '../lib/api'
+import { contarAtrasadosGeral, garantirMesAtual, listarAvisos, listarRecebimentos, resumoMes } from '../lib/api'
 import { MESES, formatarData, formatarMoeda, mesAtualBrasil } from '../lib/format'
 import { useCarregar } from '../lib/useCarregar'
 import { SeloSituacao } from '../components/SeloSituacao'
@@ -11,15 +15,21 @@ export function DashboardPage() {
   const ano = Number(params.get('ano')) || atual.ano
   const mes = Number(params.get('mes')) || atual.mes
 
-  const { dados, erro, carregando } = useCarregar(async () => {
+  const [aviso, setAviso] = useState<AvisoDados | null>(null)
+  const fecharAviso = useCallback(() => setAviso(null), [])
+
+  const { dados, erro, carregando, recarregar } = useCarregar(async () => {
     await garantirMesAtual()
-    const [resumo, pendentes, atrasadosGeral] = await Promise.all([
+    const [resumo, pendentes, atrasadosGeral, avisos] = await Promise.all([
       resumoMes(ano, mes),
       listarRecebimentos({ ano, mes, situacao: null }),
       contarAtrasadosGeral(),
+      listarAvisos(),
     ])
-    return { resumo, pendentes: pendentes.filter((r) => r.situacao !== 'pago'), atrasadosGeral }
+    return { resumo, pendentes: pendentes.filter((r) => r.situacao !== 'pago'), atrasadosGeral, avisos }
   }, [ano, mes])
+
+  useEffect(() => aoAlterarDados(recarregar), [recarregar])
 
   const r = dados?.resumo
   const percentual = r && r.total_previsto > 0 ? Math.round((r.total_recebido / r.total_previsto) * 100) : 0
@@ -38,11 +48,28 @@ export function DashboardPage() {
 
       {erro && <p className="alerta alerta--erro">{erro}</p>}
 
+      {dados && dados.avisos.length > 0 && (
+        <div className="painel-avisos">
+          <div className="painel-avisos__topo">
+            <h2>Avisos ({dados.avisos.length})</h2>
+            <Link to="/avisos">Ver todos →</Link>
+          </div>
+          <ListaAvisos
+            avisos={dados.avisos.slice(0, 5)}
+            aoAlterar={(texto) => setAviso({ tipo: 'ok', texto })}
+            aoErro={(texto) => setAviso({ tipo: 'erro', texto })}
+          />
+          {dados.avisos.length > 5 && (
+            <p className="rodape-secao"><Link to="/avisos">Mais {dados.avisos.length - 5} aviso(s) →</Link></p>
+          )}
+        </div>
+      )}
+
       {dados && dados.atrasadosGeral.quantidade > 0 && (
-        <Link to="/recebimentos?situacao=atrasado&todos=1" className="alerta alerta--erro alerta--link">
-          {dados.atrasadosGeral.quantidade} {dados.atrasadosGeral.quantidade === 1 ? 'aluguel atrasado' : 'aluguéis atrasados'} no
-          total, somando {formatarMoeda(dados.atrasadosGeral.valor)}. Ver todos →
-        </Link>
+        <p className="texto-suave texto-pequeno paragrafo">
+          Total atrasado (todos os meses): {dados.atrasadosGeral.quantidade} aluguel(éis), {formatarMoeda(dados.atrasadosGeral.valor)}.{' '}
+          <Link to="/recebimentos?situacao=atrasado&todos=1">Ver lista</Link>
+        </p>
       )}
 
       <div className={`indicadores ${carregando ? 'carregando' : ''}`}>
@@ -104,6 +131,7 @@ export function DashboardPage() {
       {dados && dados.pendentes.length > 0 && (
         <p className="rodape-secao"><Link to={linkRecebimentos('pendentes')}>Registrar pagamentos →</Link></p>
       )}
+      <Aviso aviso={aviso} aoFechar={fecharAviso} />
     </section>
   )
 }
