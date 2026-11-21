@@ -9,6 +9,9 @@ export function mensagemDeErro(erro: unknown): string {
   }
   if (/Invalid login credentials/i.test(msg)) return 'E-mail ou senha incorretos.'
   if (/Email not confirmed/i.test(msg)) return 'Confirme seu e-mail antes de entrar (veja sua caixa de entrada).'
+  if (/Invalid path specified/i.test(msg)) {
+    return 'A URL do Supabase está com um caminho a mais. Use só https://xxxx.supabase.co, sem /rest/v1 no final.'
+  }
   if (/Invalid API key|No API key/i.test(msg)) return 'Chave do Supabase inválida. Confira o arquivo .env.local.'
 
   switch (e.code) {
