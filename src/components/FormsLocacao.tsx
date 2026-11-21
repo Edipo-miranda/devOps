@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { CampoData } from './CampoData'
 import { Modal } from './Modal'
 import { Campo, CamposContrato, CamposLocacao } from './CamposLocacao'
 import { validarContrato, validarLocacao, valoresLocacaoIniciais, type ErrosLocacao, type ValoresContrato } from '../lib/validacaoLocacao'
@@ -81,7 +82,6 @@ export function FormEditarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: Lo
   const [contrato, setContrato] = useState<ValoresContrato>({
     prazo: locacao.prazo_meses ? String(locacao.prazo_meses) : '',
     reajuste: locacao.reajuste_meses ? String(locacao.reajuste_meses) : '',
-    indice: locacao.indice_reajuste ?? '',
   })
   const [inicioContrato, setInicioContrato] = useState(locacao.data_inicio_contrato)
   const [ultimoReajuste, setUltimoReajuste] = useState(locacao.data_ultimo_reajuste ?? '')
@@ -115,7 +115,6 @@ export function FormEditarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: Lo
         prazo_meses: c.prazo,
         data_inicio_contrato: inicioContrato,
         reajuste_meses: c.reajuste,
-        indice_reajuste: c.indice,
         data_ultimo_reajuste: ultimoReajuste || null,
       })
       invalidarMesAtual()
@@ -136,7 +135,7 @@ export function FormEditarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: Lo
         </p>
         <div className="grade-3">
           <Campo rotulo="Data de entrada" erro={erros.dataEntrada}>
-            <input type="date" value={dataEntrada} onChange={(e) => setDataEntrada(e.target.value)} />
+            <CampoData valor={dataEntrada} aoMudar={setDataEntrada} />
           </Campo>
           <Campo rotulo="Valor atual do aluguel (R$)" erro={erros.valor}>
             <input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" />
@@ -148,10 +147,10 @@ export function FormEditarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: Lo
         <CamposContrato valores={contrato} erros={erros} aoMudar={setContrato} />
         <div className="grade-2">
           <Campo rotulo="Início do contrato atual" dica="muda ao renovar" erro={erros.inicioContrato}>
-            <input type="date" value={inicioContrato} onChange={(e) => setInicioContrato(e.target.value)} />
+            <CampoData valor={inicioContrato} aoMudar={setInicioContrato} />
           </Campo>
           <Campo rotulo="Último reajuste em" dica="vazio = nunca reajustado" erro={erros.ultimoReajuste}>
-            <input type="date" value={ultimoReajuste} onChange={(e) => setUltimoReajuste(e.target.value)} />
+            <CampoData valor={ultimoReajuste} aoMudar={setUltimoReajuste} />
           </Campo>
         </div>
         {erroGeral && <p className="alerta alerta--erro" role="alert">{erroGeral}</p>}
@@ -168,7 +167,7 @@ export function FormReajuste({ locacao, aoFechar, aoSalvar }: { locacao: Locacao
   const previsto = proximoReajuste(locacao)
   const [data, setData] = useState(previsto && previsto <= hoje ? previsto : hoje)
   const [valor, setValor] = useState('')
-  const [observacao, setObservacao] = useState(locacao.indice_reajuste ?? '')
+  const [observacao, setObservacao] = useState('')
   const [aplicar, setAplicar] = useState(false)
   const [erros, setErros] = useState<Record<string, string>>({})
   const [erroGeral, setErroGeral] = useState<string | null>(null)
@@ -212,12 +211,12 @@ export function FormReajuste({ locacao, aoFechar, aoSalvar }: { locacao: Locacao
         <p className="texto-suave paragrafo">
           Valor atual: <strong>{formatarMoeda(atual)}</strong>
           {previsto && <> · reajuste previsto para <strong>{formatarData(previsto)}</strong></>}
-          {locacao.indice_reajuste && <> · índice {locacao.indice_reajuste}</>}.
-          O novo valor é informado por você; o app não calcula índices.
+.
+          O novo valor é definido pelo proprietário; o app não faz cálculos.
         </p>
         <div className="grade-2">
           <Campo rotulo="Data do reajuste" erro={erros.data}>
-            <input type="date" value={data} min={locacao.data_entrada} onChange={(e) => setData(e.target.value)} />
+            <CampoData valor={data} min={locacao.data_entrada} aoMudar={setData} />
           </Campo>
           <Campo rotulo="Novo valor do aluguel (R$)" erro={erros.valor}>
             <input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" placeholder={valorParaCampo(atual)} />
@@ -230,7 +229,7 @@ export function FormReajuste({ locacao, aoFechar, aoSalvar }: { locacao: Locacao
           </p>
         )}
         <Campo rotulo="Observação" dica="opcional" erro={erros.observacao}>
-          <input value={observacao} onChange={(e) => setObservacao(e.target.value)} maxLength={300} placeholder="Ex.: IGP-M acumulado 4,2%" />
+          <input value={observacao} onChange={(e) => setObservacao(e.target.value)} maxLength={300} placeholder="Ex.: novo valor combinado com o inquilino" />
         </Campo>
         <label className="checagem paragrafo">
           <input type="checkbox" checked={aplicar} onChange={(e) => setAplicar(e.target.checked)} />
@@ -335,7 +334,7 @@ export function FormEncerrarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: 
           Lançamentos <strong>sem pagamento</strong> de meses posteriores ao mês da saída serão removidos.
         </p>
         <Campo rotulo="Data de saída">
-          <input type="date" value={dataSaida} min={locacao.data_entrada} onChange={(e) => setDataSaida(e.target.value)} />
+          <CampoData valor={dataSaida} min={locacao.data_entrada} aoMudar={setDataSaida} />
         </Campo>
         {erro && <p className="alerta alerta--erro" role="alert">{erro}</p>}
         <Rodape salvando={salvando} aoFechar={aoFechar} rotulo="Encerrar locação" />

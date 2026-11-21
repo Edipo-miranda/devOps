@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { CampoData } from './CampoData'
 import { Modal } from './Modal'
 import { Campo } from './CamposLocacao'
 import { editarLancamento, registrarPagamento } from '../lib/api'
@@ -66,7 +67,7 @@ export function FormPagamento({ recebimento, aoFechar, aoSalvar }: { recebimento
             <input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" />
           </Campo>
           <Campo rotulo="Data do recebimento" erro={erros.data}>
-            <input type="date" value={data} max={hoje} onChange={(e) => setData(e.target.value)} />
+            <CampoData valor={data} max={hoje} aoMudar={setData} />
           </Campo>
         </div>
         {valorNum !== null && Math.abs(diferenca) >= 0.01 && (
@@ -128,7 +129,7 @@ export function FormEditarLancamento({ recebimento, aoFechar, aoSalvar }: { rece
             <input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" />
           </Campo>
           <Campo rotulo="Vencimento" erro={erros.vencimento}>
-            <input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} />
+            <CampoData valor={vencimento} aoMudar={setVencimento} />
           </Campo>
         </div>
         {erroGeral && <p className="alerta alerta--erro" role="alert">{erroGeral}</p>}

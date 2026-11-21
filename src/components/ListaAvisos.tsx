@@ -31,9 +31,9 @@ function descricao(a: Aviso): string {
       if (a.dias === 0) return `Contrato de ${a.detalhe} termina hoje`
       return `Contrato de ${a.detalhe} terminou em ${data} — renove ou encerre`
     case 'reajuste':
-      if (a.dias > 0) return `Reajuste${a.detalhe ? ` (${a.detalhe})` : ''} previsto em ${dias(a.dias)} (${data})`
-      if (a.dias === 0) return `Reajuste${a.detalhe ? ` (${a.detalhe})` : ''} previsto para hoje`
-      return `Reajuste${a.detalhe ? ` (${a.detalhe})` : ''} previsto desde ${data} — ainda não registrado`
+      if (a.dias > 0) return `Reajuste previsto em ${dias(a.dias)} (${data})`
+      if (a.dias === 0) return `Reajuste previsto para hoje`
+      return `Reajuste previsto desde ${data} — ainda não registrado`
   }
 }
 

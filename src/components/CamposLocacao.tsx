@@ -1,4 +1,5 @@
 import type { Inquilino } from '../types/database'
+import { CampoData } from './CampoData'
 import type { ErrosLocacao, ValoresContrato, ValoresLocacao } from '../lib/validacaoLocacao'
 
 interface Props {
@@ -50,7 +51,7 @@ export function CamposLocacao({ valores, erros, inquilinos, aoMudar }: Props) {
 
       <div className="grade-3">
         <Campo rotulo="Data de entrada" erro={erros.dataEntrada}>
-          <input type="date" value={valores.dataEntrada} onChange={(e) => set('dataEntrada', e.target.value)} />
+          <CampoData valor={valores.dataEntrada} aoMudar={(v) => set('dataEntrada', v)} />
         </Campo>
         <Campo rotulo="Valor do aluguel (R$)" erro={erros.valor}>
           <input value={valores.valor} onChange={(e) => set('valor', e.target.value)} inputMode="decimal" placeholder="1.500,00" />
@@ -77,28 +78,22 @@ export function Campo({ rotulo, dica, erro, children }: { rotulo: string; dica?:
   )
 }
 
-/** Prazo do contrato e reajuste (usados no cadastro e na edição da locação). */
+/** Prazo do contrato e periodicidade do reajuste (cadastro e edição da locação). */
 export function CamposContrato({ valores, erros, aoMudar }: {
   valores: ValoresContrato
   erros: Partial<Record<keyof ValoresContrato, string>>
   aoMudar: (v: ValoresContrato) => void
 }) {
   const set = (k: keyof ValoresContrato, val: string) =>
-    aoMudar({ prazo: valores.prazo, reajuste: valores.reajuste, indice: valores.indice, [k]: val })
+    aoMudar({ prazo: valores.prazo, reajuste: valores.reajuste, [k]: val })
 
   return (
-    <div className="grade-3">
+    <div className="grade-2">
       <Campo rotulo="Prazo do contrato (meses)" dica="vazio = indeterminado" erro={erros.prazo}>
         <input type="number" min={1} max={240} value={valores.prazo} onChange={(e) => set('prazo', e.target.value)} placeholder="12" />
       </Campo>
       <Campo rotulo="Reajuste a cada (meses)" dica="vazio = sem reajuste" erro={erros.reajuste}>
         <input type="number" min={1} max={120} value={valores.reajuste} onChange={(e) => set('reajuste', e.target.value)} placeholder="12" />
-      </Campo>
-      <Campo rotulo="Índice do reajuste" dica="opcional" erro={erros.indice}>
-        <input value={valores.indice} onChange={(e) => set('indice', e.target.value)} maxLength={40} placeholder="IGP-M, IPCA…" list="indices-reajuste" />
-        <datalist id="indices-reajuste">
-          <option value="IGP-M" /><option value="IPCA" /><option value="INPC" /><option value="IVAR" />
-        </datalist>
       </Campo>
     </div>
   )

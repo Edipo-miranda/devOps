@@ -6,14 +6,14 @@
 --
 -- O que este script adiciona:
 --   * Na locação: prazo do contrato, início do contrato atual, reajuste
---     (a cada quantos meses), índice e data do último reajuste.
+--     (a cada quantos meses) e data do último reajuste.
 --   * Tabela "reajustes": histórico de cada reajuste aplicado.
 --   * Tabela "configuracoes": com quantos dias de antecedência avisar.
 --   * Função "avisos": lista parcelas vencendo/vencidas, contratos
 --     terminando e reajustes chegando.
 --
 -- Reajuste NÃO é calculado automaticamente: o app apenas avisa a data;
--- o novo valor é sempre informado por você.
+-- o novo valor é sempre definido pelo proprietário.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -22,7 +22,6 @@
 alter table public.locacoes add column if not exists prazo_meses          smallint; -- ex.: 12 (vazio = prazo indeterminado)
 alter table public.locacoes add column if not exists data_inicio_contrato date;     -- início do contrato atual (muda na renovação)
 alter table public.locacoes add column if not exists reajuste_meses       smallint; -- ex.: 12 (vazio = sem reajuste)
-alter table public.locacoes add column if not exists indice_reajuste      text;     -- ex.: IGP-M, IPCA (só informativo)
 alter table public.locacoes add column if not exists data_ultimo_reajuste date;     -- base para o próximo reajuste
 
 update public.locacoes set data_inicio_contrato = data_entrada where data_inicio_contrato is null;
@@ -35,7 +34,6 @@ set search_path = ''
 as $$
 begin
   new.data_inicio_contrato := coalesce(new.data_inicio_contrato, new.data_entrada);
-  new.indice_reajuste := nullif(btrim(coalesce(new.indice_reajuste, '')), '');
   return new;
 end;
 $$;
@@ -50,8 +48,6 @@ alter table public.locacoes drop constraint if exists locacoes_prazo_chk;
 alter table public.locacoes add constraint locacoes_prazo_chk check (prazo_meses is null or prazo_meses between 1 and 240);
 alter table public.locacoes drop constraint if exists locacoes_reajuste_chk;
 alter table public.locacoes add constraint locacoes_reajuste_chk check (reajuste_meses is null or reajuste_meses between 1 and 120);
-alter table public.locacoes drop constraint if exists locacoes_indice_chk;
-alter table public.locacoes add constraint locacoes_indice_chk check (indice_reajuste is null or length(indice_reajuste) <= 40);
 alter table public.locacoes drop constraint if exists locacoes_inicio_contrato_chk;
 alter table public.locacoes add constraint locacoes_inicio_contrato_chk check (data_inicio_contrato >= data_entrada);
 alter table public.locacoes drop constraint if exists locacoes_ultimo_reajuste_chk;
@@ -138,6 +134,12 @@ $$;
 -- ---------------------------------------------------------------------
 drop function if exists public.cadastrar_imovel(text, text, text, uuid, text, text, date, numeric, int);
 drop function if exists public.registrar_locacao(uuid, uuid, text, text, date, numeric, int);
+-- Versões de uma edição anterior deste script (com índice de reajuste):
+drop function if exists public.cadastrar_imovel(text, text, text, uuid, text, text, date, numeric, int, int, int, text);
+drop function if exists public.registrar_locacao(uuid, uuid, text, text, date, numeric, int, int, int, text);
+-- O índice de reajuste foi retirado: o valor do reajuste é definido pelo proprietário.
+alter table public.locacoes drop constraint if exists locacoes_indice_chk;
+alter table public.locacoes drop column if exists indice_reajuste;
 
 create or replace function public.registrar_locacao(
   p_imovel_id          uuid,
@@ -148,8 +150,7 @@ create or replace function public.registrar_locacao(
   p_valor_aluguel      numeric,
   p_dia_vencimento     int,
   p_prazo_meses        int  default null,
-  p_reajuste_meses     int  default null,
-  p_indice_reajuste    text default null
+  p_reajuste_meses     int  default null
 )
 returns uuid
 language plpgsql
@@ -187,9 +188,9 @@ begin
   end if;
 
   insert into public.locacoes (imovel_id, inquilino_id, data_entrada, valor_aluguel, dia_vencimento,
-                               prazo_meses, reajuste_meses, indice_reajuste)
+                               prazo_meses, reajuste_meses)
   values (p_imovel_id, v_inquilino, p_data_entrada, p_valor_aluguel, p_dia_vencimento,
-          p_prazo_meses, p_reajuste_meses, p_indice_reajuste)
+          p_prazo_meses, p_reajuste_meses)
   returning id into v_locacao;
 
   return v_locacao;
@@ -207,8 +208,7 @@ create or replace function public.cadastrar_imovel(
   p_valor_aluguel      numeric,
   p_dia_vencimento     int,
   p_prazo_meses        int  default null,
-  p_reajuste_meses     int  default null,
-  p_indice_reajuste    text default null
+  p_reajuste_meses     int  default null
 )
 returns uuid
 language plpgsql
@@ -229,7 +229,7 @@ begin
   if p_data_entrada is not null then
     perform public.registrar_locacao(v_imovel, p_inquilino_id, p_inquilino_nome, p_inquilino_telefone,
                                      p_data_entrada, p_valor_aluguel, p_dia_vencimento,
-                                     p_prazo_meses, p_reajuste_meses, p_indice_reajuste);
+                                     p_prazo_meses, p_reajuste_meses);
   end if;
 
   return v_imovel;
@@ -385,7 +385,7 @@ as $$
   union all
 
   select 'reajuste', c.proximo_reajuste, c.proximo_reajuste - cfg.hoje, c.imovel_id, c.identificacao, c.nome, c.id, null,
-         c.valor_aluguel, c.indice_reajuste
+         c.valor_aluguel, c.reajuste_meses || ' meses'
     from contratos c, cfg
    where c.reajuste_meses is not null
      and c.proximo_reajuste <= cfg.hoje + cfg.dias_contrato
@@ -394,15 +394,15 @@ as $$
 $$;
 
 revoke all on function public.config_avisos() from public, anon;
-revoke all on function public.registrar_locacao(uuid, uuid, text, text, date, numeric, int, int, int, text) from public, anon;
-revoke all on function public.cadastrar_imovel(text, text, text, uuid, text, text, date, numeric, int, int, int, text) from public, anon;
+revoke all on function public.registrar_locacao(uuid, uuid, text, text, date, numeric, int, int, int) from public, anon;
+revoke all on function public.cadastrar_imovel(text, text, text, uuid, text, text, date, numeric, int, int, int) from public, anon;
 revoke all on function public.registrar_reajuste(uuid, date, numeric, text, boolean) from public, anon;
 revoke all on function public.preparar_lancamentos() from public, anon;
 revoke all on function public.avisos() from public, anon;
 
 grant execute on function public.config_avisos() to authenticated;
-grant execute on function public.registrar_locacao(uuid, uuid, text, text, date, numeric, int, int, int, text) to authenticated;
-grant execute on function public.cadastrar_imovel(text, text, text, uuid, text, text, date, numeric, int, int, int, text) to authenticated;
+grant execute on function public.registrar_locacao(uuid, uuid, text, text, date, numeric, int, int, int) to authenticated;
+grant execute on function public.cadastrar_imovel(text, text, text, uuid, text, text, date, numeric, int, int, int) to authenticated;
 grant execute on function public.registrar_reajuste(uuid, date, numeric, text, boolean) to authenticated;
 grant execute on function public.preparar_lancamentos() to authenticated;
 grant execute on function public.avisos() to authenticated;

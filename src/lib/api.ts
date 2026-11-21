@@ -65,7 +65,6 @@ export interface DadosNovaLocacao {
   dia_vencimento: number
   prazo_meses: number | null
   reajuste_meses: number | null
-  indice_reajuste: string | null
 }
 
 export async function cadastrarImovel(imovel: DadosImovel, locacao: DadosNovaLocacao | null): Promise<string> {
@@ -81,7 +80,6 @@ export async function cadastrarImovel(imovel: DadosImovel, locacao: DadosNovaLoc
     p_dia_vencimento: locacao?.dia_vencimento ?? null,
     p_prazo_meses: locacao?.prazo_meses ?? null,
     p_reajuste_meses: locacao?.reajuste_meses ?? null,
-    p_indice_reajuste: locacao?.indice_reajuste ?? null,
   })
   if (error) throw error
   notificarAlteracao()
@@ -125,7 +123,6 @@ export async function registrarLocacao(imovelId: string, l: DadosNovaLocacao): P
     p_dia_vencimento: l.dia_vencimento,
     p_prazo_meses: l.prazo_meses,
     p_reajuste_meses: l.reajuste_meses,
-    p_indice_reajuste: l.indice_reajuste,
   })
   if (error) throw error
   notificarAlteracao()
@@ -138,7 +135,6 @@ export interface DadosEdicaoLocacao {
   prazo_meses: number | null
   data_inicio_contrato: string
   reajuste_meses: number | null
-  indice_reajuste: string | null
   data_ultimo_reajuste: string | null
 }
 

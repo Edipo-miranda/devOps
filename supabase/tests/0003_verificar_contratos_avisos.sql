@@ -35,10 +35,10 @@ begin
   -- fim do contrato e reajuste caem daqui a ~15 dias -> devem aparecer (aviso de 60 dias).
   v_imovel := public.cadastrar_imovel('TESTE Apto A', 'Rua Teste, 1', null, null, 'TESTE Inquilino A', null,
                                       (v_hoje - interval '11 months' - interval '15 days')::date, 1000, 28,
-                                      12, 12, 'IGP-M');
+                                      12, 12);
   select id into v_loc from public.locacoes where imovel_id = v_imovel;
   select * into v_rec from public.locacoes where id = v_loc;
-  if v_rec.prazo_meses <> 12 or v_rec.reajuste_meses <> 12 or v_rec.indice_reajuste <> 'IGP-M'
+  if v_rec.prazo_meses <> 12 or v_rec.reajuste_meses <> 12
      or v_rec.data_inicio_contrato <> v_rec.data_entrada then
     raise exception 'FALHOU: campos de contrato não gravados';
   end if;
@@ -96,7 +96,7 @@ begin
   insert into resultado_testes (teste) values ('Aviso de parcela some após pagamento');
 
   -- Reajuste: grava histórico, muda valor atual, não mexe em lançamento pago
-  v_qtd := public.registrar_reajuste(v_loc, v_hoje, 1100, 'IGP-M 10%', true);
+  v_qtd := public.registrar_reajuste(v_loc, v_hoje, 1100, 'Acordo com o proprietário', true);
   select valor_aluguel, data_ultimo_reajuste into v_rec from public.locacoes where id = v_loc;
   if v_rec.valor_aluguel <> 1100 or v_rec.data_ultimo_reajuste <> v_hoje then
     raise exception 'FALHOU: reajuste não atualizou a locação';

@@ -11,14 +11,13 @@ export interface ValoresLocacao {
   dia: string
   prazo: string // meses; vazio = indeterminado
   reajuste: string // meses; vazio = sem reajuste
-  indice: string
 }
 
 export type ErrosLocacao = Partial<Record<keyof ValoresLocacao, string>>
 
 export function valoresLocacaoIniciais(): ValoresLocacao {
   return { modoInquilino: 'novo', inquilinoId: '', nome: '', telefone: '', dataEntrada: hojeBrasil(), valor: '', dia: '',
-    prazo: '12', reajuste: '12', indice: '' }
+    prazo: '12', reajuste: '12' }
 }
 
 /** Valida os campos. Retorna os erros encontrados e, se não houver, os dados prontos para gravar. */
@@ -59,7 +58,6 @@ export function validarLocacao(v: ValoresLocacao): { erros: ErrosLocacao; dados:
       dia_vencimento: dia,
       prazo_meses: contrato.prazo,
       reajuste_meses: contrato.reajuste,
-      indice_reajuste: contrato.indice,
     },
   }
 }
@@ -74,16 +72,14 @@ function lerMeses(texto: string, maximo: number): number | null | undefined {
 export interface ValoresContrato {
   prazo: string
   reajuste: string
-  indice: string
 }
 
-/** Valida prazo do contrato, periodicidade e índice do reajuste. */
+/** Valida o prazo do contrato e a periodicidade do reajuste. */
 export function validarContrato(v: ValoresContrato) {
   const erros: Partial<Record<keyof ValoresContrato, string>> = {}
   const prazo = lerMeses(v.prazo, 240)
   const reajuste = lerMeses(v.reajuste, 120)
   if (prazo === undefined) erros.prazo = 'Informe de 1 a 240 meses, ou deixe vazio (indeterminado).'
   if (reajuste === undefined) erros.reajuste = 'Informe de 1 a 120 meses, ou deixe vazio (sem reajuste).'
-  if (v.indice.trim().length > 40) erros.indice = 'Máximo de 40 caracteres.'
-  return { erros, prazo: prazo ?? null, reajuste: reajuste ?? null, indice: v.indice.trim() || null }
+  return { erros, prazo: prazo ?? null, reajuste: reajuste ?? null }
 }

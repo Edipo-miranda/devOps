@@ -170,7 +170,7 @@ export function ImovelDetalhePage() {
                 <dt>Fim do contrato</dt>
                 <dd className={fim && fim <= hoje ? 'texto-erro' : ''}>{fim ? `${formatarData(fim)} (${prazoRelativo(fim)})` : '—'}</dd>
               </div>
-              <div><dt>Reajuste</dt><dd>{ativa.reajuste_meses ? `A cada ${ativa.reajuste_meses} meses${ativa.indice_reajuste ? ` · ${ativa.indice_reajuste}` : ''}` : 'Sem reajuste'}</dd></div>
+              <div><dt>Reajuste</dt><dd>{ativa.reajuste_meses ? `A cada ${ativa.reajuste_meses} meses` : 'Sem reajuste'}</dd></div>
               <div><dt>Último reajuste</dt><dd>{formatarData(ativa.data_ultimo_reajuste)}</dd></div>
               <div>
                 <dt>Próximo reajuste</dt>

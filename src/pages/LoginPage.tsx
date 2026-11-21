@@ -29,9 +29,20 @@ export function LoginPage() {
 
   return (
     <div className="login">
+      <div className="login__painel">
+        <span className="marca__logo marca__logo--grande" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="28" height="28"><path d="M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-4.5v-5.5h-5V21H5a1 1 0 0 1-1-1z" fill="currentColor" /></svg>
+        </span>
+        <h2>Seus aluguéis organizados em um só lugar.</h2>
+        <ul>
+          <li>Recebimentos de cada mês, sem planilhas</li>
+          <li>Avisos de vencimento, fim de contrato e reajuste</li>
+          <li>Histórico completo de inquilinos e pagamentos</li>
+        </ul>
+      </div>
       <form className="login__cartao" onSubmit={entrar} noValidate>
-        <h1 className="login__titulo">Controle de Aluguéis</h1>
-        <p className="texto-suave">Entre com o usuário cadastrado no Supabase.</p>
+        <h1 className="login__titulo">Entrar</h1>
+        <p className="texto-suave">Use o usuário cadastrado no Supabase.</p>
 
         <label className="campo">
           <span>E-mail</span>

@@ -8,6 +8,7 @@ import { contarAtrasadosGeral, garantirMesAtual, listarAvisos, listarRecebimento
 import { MESES, formatarData, formatarMoeda, mesAtualBrasil } from '../lib/format'
 import { useCarregar } from '../lib/useCarregar'
 import { SeloSituacao } from '../components/SeloSituacao'
+import { IconeAlerta, IconeAlvo, IconeCheck, IconeRelogio } from '../components/Icones'
 
 export function DashboardPage() {
   const [params, setParams] = useSearchParams()
@@ -38,15 +39,65 @@ export function DashboardPage() {
 
   return (
     <section>
-      <div className="cabecalho-pagina">
-        <div>
-          <h1>Dashboard</h1>
-          <p className="texto-suave">Resumo dos aluguéis de {MESES[mes - 1].toLowerCase()} de {ano}.</p>
+      <div className="destaque-topo">
+        <div className="destaque-topo__texto">
+          <span className="destaque-topo__rotulo">Resumo de {MESES[mes - 1].toLowerCase()} de {ano}</span>
+          <h1>{r ? formatarMoeda(r.total_recebido) : '—'}</h1>
+          <p>
+            recebidos de {r ? formatarMoeda(r.total_previsto) : '—'} previstos
+            {r && r.total_pendente > 0 ? ` · faltam ${formatarMoeda(r.total_pendente)}` : ''}
+          </p>
+          <div className="destaque-topo__barra" aria-label={`${percentual}% recebido`}>
+            <span style={{ width: `${Math.min(percentual, 100)}%` }} />
+          </div>
         </div>
-        <FiltroPeriodo ano={ano} mes={mes} aoMudar={(a, m) => setParams({ ano: String(a), mes: String(m ?? atual.mes) })} />
+        <div className="destaque-topo__lado">
+          <div className="anel" style={{ ['--p' as string]: Math.min(percentual, 100) }}>
+            <span>{percentual}%</span>
+          </div>
+          <FiltroPeriodo ano={ano} mes={mes} aoMudar={(a, m) => setParams({ ano: String(a), mes: String(m ?? atual.mes) })} />
+        </div>
       </div>
 
       {erro && <p className="alerta alerta--erro">{erro}</p>}
+
+      <div className={`indicadores ${carregando ? 'carregando' : ''}`}>
+        <Link to={linkRecebimentos()} className="indicador indicador--azul">
+          <span className="indicador__icone"><IconeAlvo /></span>
+          <span className="indicador__rotulo">Previsto no mês</span>
+          <span className="indicador__valor">{r ? formatarMoeda(r.total_previsto) : '—'}</span>
+          <span className="indicador__rodape">{r ? `${r.qtd_lancamentos} lançamento(s)` : ' '}</span>
+        </Link>
+        <Link to={linkRecebimentos('pago')} className="indicador indicador--verde">
+          <span className="indicador__icone"><IconeCheck /></span>
+          <span className="indicador__rotulo">Recebido</span>
+          <span className="indicador__valor">{r ? formatarMoeda(r.total_recebido) : '—'}</span>
+          <span className="indicador__rodape">{r ? `${r.qtd_pagos} pago(s) · ${percentual}% do previsto` : ' '}</span>
+        </Link>
+        <Link to={linkRecebimentos('pendentes')} className="indicador indicador--ambar">
+          <span className="indicador__icone"><IconeRelogio /></span>
+          <span className="indicador__rotulo">Pendente</span>
+          <span className="indicador__valor">{r ? formatarMoeda(r.total_pendente) : '—'}</span>
+          <span className="indicador__rodape">{r ? `${r.qtd_em_aberto + r.qtd_atrasados} a receber` : ' '}</span>
+        </Link>
+        <Link to={linkRecebimentos('atrasado')} className="indicador indicador--vermelho">
+          <span className="indicador__icone"><IconeAlerta /></span>
+          <span className="indicador__rotulo">Atrasados no mês</span>
+          <span className="indicador__valor">{r ? r.qtd_atrasados : '—'}</span>
+          <span className="indicador__rodape">vencidos e sem pagamento</span>
+        </Link>
+      </div>
+
+      {dados && dados.atrasadosGeral.quantidade > 0 && (
+        <Link to="/recebimentos?situacao=atrasado&todos=1" className="faixa-alerta">
+          <IconeAlerta tamanho={18} />
+          <span>
+            Total atrasado em todos os meses: <strong>{dados.atrasadosGeral.quantidade}</strong> aluguel(éis),{' '}
+            <strong>{formatarMoeda(dados.atrasadosGeral.valor)}</strong>
+          </span>
+          <span className="faixa-alerta__acao">Ver lista →</span>
+        </Link>
+      )}
 
       {dados && dados.avisos.length > 0 && (
         <div className="painel-avisos">
@@ -65,40 +116,6 @@ export function DashboardPage() {
         </div>
       )}
 
-      {dados && dados.atrasadosGeral.quantidade > 0 && (
-        <p className="texto-suave texto-pequeno paragrafo">
-          Total atrasado (todos os meses): {dados.atrasadosGeral.quantidade} aluguel(éis), {formatarMoeda(dados.atrasadosGeral.valor)}.{' '}
-          <Link to="/recebimentos?situacao=atrasado&todos=1">Ver lista</Link>
-        </p>
-      )}
-
-      <div className={`indicadores ${carregando ? 'carregando' : ''}`}>
-        <Link to={linkRecebimentos()} className="indicador">
-          <span className="indicador__rotulo">Previsto no mês</span>
-          <span className="indicador__valor">{r ? formatarMoeda(r.total_previsto) : '—'}</span>
-          <span className="indicador__rodape">{r ? `${r.qtd_lancamentos} lançamento(s)` : ' '}</span>
-        </Link>
-        <Link to={linkRecebimentos('pago')} className="indicador">
-          <span className="indicador__rotulo">Recebido</span>
-          <span className="indicador__valor indicador__valor--ok">{r ? formatarMoeda(r.total_recebido) : '—'}</span>
-          <span className="indicador__rodape">
-            <span className="barra"><span className="barra__preenchida" style={{ width: `${Math.min(percentual, 100)}%` }} /></span>
-            {percentual}% do previsto
-          </span>
-        </Link>
-        <Link to={linkRecebimentos('pendentes')} className="indicador">
-          <span className="indicador__rotulo">Pendente</span>
-          <span className="indicador__valor">{r ? formatarMoeda(r.total_pendente) : '—'}</span>
-          <span className="indicador__rodape">{r ? `${r.qtd_em_aberto + r.qtd_atrasados} a receber` : ' '}</span>
-        </Link>
-        <Link to={linkRecebimentos('atrasado')} className="indicador">
-          <span className="indicador__rotulo">Atrasados no mês</span>
-          <span className={`indicador__valor ${r && r.qtd_atrasados > 0 ? 'indicador__valor--erro' : ''}`}>
-            {r ? r.qtd_atrasados : '—'}
-          </span>
-          <span className="indicador__rodape">vencidos e sem pagamento</span>
-        </Link>
-      </div>
 
       <h2 className="titulo-secao">A receber neste mês</h2>
       {dados && dados.pendentes.length === 0 && (

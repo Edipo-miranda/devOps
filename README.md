@@ -198,7 +198,7 @@ mensagem explica o motivo (ex.: SQL não executado, chave errada).
 - **Fim do contrato:** 60 dias antes de completar o prazo (ex.: 12 meses). Some ao **renovar** (novo período),
   ao marcar **prazo indeterminado** ou ao **encerrar** a locação.
 - **Reajuste:** 60 dias antes da data (último reajuste — ou a entrada — + periodicidade). Some ao **registrar o
-  reajuste**, informando o novo valor. O app **não calcula** índices; o histórico de reajustes fica guardado.
+  reajuste**, informando o novo valor definido pelo proprietário (o app não faz cálculos). O histórico de reajustes fica guardado.
 - A antecedência (3 e 60 dias) pode ser alterada em **Configurações dos avisos** (rodapé).
 
 ## Roteiro de teste com dados reais

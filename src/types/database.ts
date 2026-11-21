@@ -37,7 +37,6 @@ export interface Locacao {
   prazo_meses: number | null // vazio = prazo indeterminado
   data_inicio_contrato: string // início do contrato atual (muda ao renovar)
   reajuste_meses: number | null // vazio = sem reajuste
-  indice_reajuste: string | null
   data_ultimo_reajuste: string | null
   created_at: string
   updated_at: string
