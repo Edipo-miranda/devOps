@@ -234,6 +234,16 @@ Um lançamento com vencimento já passado e sem pagamento aparece como **Atrasad
 
 O arquivo `vercel.json` faz as rotas do aplicativo (ex.: `/recebimentos`) funcionarem ao recarregar a página.
 
+## Instalar no celular (como aplicativo)
+
+Depois de publicado na Vercel (endereço `https://...vercel.app`):
+
+- **Android (Chrome):** abra o endereço → menu **⋮** → **Instalar app** (ou **Adicionar à tela inicial**).
+- **iPhone (Safari):** abra o endereço → botão **Compartilhar** (quadrado com seta) → **Adicionar à Tela de Início**.
+
+O ícone "Aluguéis" aparece na tela inicial e o app abre em tela cheia. Ele precisa de internet
+(os dados ficam no Supabase) e se atualiza sozinho a cada nova publicação.
+
 ## Comandos
 
 | Comando | O que faz |
