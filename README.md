@@ -232,6 +232,10 @@ Um lançamento com vencimento já passado e sem pagamento aparece como **Atrasad
    (os mesmos valores do `.env.local`) e clique em **Deploy**.
 4. No Supabase, em **Authentication** → **URL Configuration**, coloque o endereço da Vercel em **Site URL**.
 
+Se o painel da Vercel mostrar **"Sem implantação em produção"**, abra **Deployments**, clique em
+**Create Deployment** (ou nos **⋯** → **Create Deployment**), informe a branch `ccr-24d97354-i2totz` e confirme.
+Toda nova atualização enviada para essa branch é publicada automaticamente.
+
 O arquivo `vercel.json` faz as rotas do aplicativo (ex.: `/recebimentos`) funcionarem ao recarregar a página.
 
 ## Instalar no celular (como aplicativo)
