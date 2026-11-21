@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Campo } from '../components/CamposLocacao'
+import { FormNovaSenha } from '../components/FormNovaSenha'
+import { useAuth } from '../auth/AuthProvider'
 import { CONFIG_PADRAO, lerConfiguracoes, salvarConfiguracoes } from '../lib/api'
 import { mensagemDeErro } from '../lib/erros'
 import { useCarregar } from '../lib/useCarregar'
@@ -8,17 +10,28 @@ import type { Configuracoes } from '../types/database'
 
 export function ConfiguracoesPage() {
   const { dados, erro } = useCarregar(lerConfiguracoes, [])
+  const { sessao } = useAuth()
+  const [senhaOk, setSenhaOk] = useState(false)
   return (
     <section>
-      <Link to="/avisos" className="voltar">← Avisos</Link>
+
       <div className="cabecalho-pagina">
         <div>
-          <h1>Configurações dos avisos</h1>
-          <p className="texto-suave">Com quantos dias de antecedência o aplicativo deve avisar.</p>
+          <h1>Configurações</h1>
+          <p className="texto-suave">Antecedência dos avisos e dados da sua conta.</p>
         </div>
       </div>
       {erro && <p className="alerta alerta--erro">{erro}</p>}
       {dados && <FormConfiguracoes inicial={dados} />}
+
+      <h2 className="titulo-secao">Minha conta</h2>
+      <div className="cartao cartao--estreito">
+        <p className="texto-suave paragrafo">Entrando como <strong>{sessao?.user.email}</strong>.</p>
+        <h3 className="paragrafo">Alterar minha senha</h3>
+        {senhaOk && <p className="alerta alerta--ok" role="status">Senha alterada.</p>}
+        <FormNovaSenha rotuloBotao="Alterar senha" aoSalvar={() => setSenhaOk(true)} />
+      </div>
+      <p className="rodape-secao"><Link to="/verificacao">Verificar conexão com o banco →</Link></p>
     </section>
   )
 }

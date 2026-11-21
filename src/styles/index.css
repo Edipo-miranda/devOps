@@ -392,6 +392,8 @@ a.botao { text-decoration: none; display: inline-block; }
   background: var(--superficie); border: 1px solid var(--borda); border-radius: 22px; padding: 32px; box-shadow: var(--sombra-forte);
 }
 .login__titulo { font-size: 1.6rem; }
+.login--simples { grid-template-columns: 1fr; background: var(--lateral);
+  background-image: radial-gradient(circle at 10% 10%, rgba(20, 184, 166, 0.35), transparent 45%); }
 .login__cartao > .texto-suave { margin-bottom: 22px; }
 
 /* ============================ Telas médias ============================ */
@@ -434,6 +436,7 @@ a.botao { text-decoration: none; display: inline-block; }
   .login__painel h2 { font-size: 1.4rem; }
   .login__painel ul { display: none; }
   .login__cartao { margin: -16px auto 24px; width: calc(100% - 32px); }
+  .login--simples .login__cartao { margin: 24px auto; }
 }
 
 @media (max-width: 640px) {

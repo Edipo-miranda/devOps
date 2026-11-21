@@ -4,6 +4,7 @@ import { RequireAuth } from './auth/RequireAuth'
 import { Layout } from './components/Layout'
 import { erroConfiguracao } from './lib/supabase'
 import { LoginPage } from './pages/LoginPage'
+import { DefinirSenhaPage } from './pages/DefinirSenhaPage'
 import { VerificacaoPage } from './pages/VerificacaoPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { ImoveisPage } from './pages/ImoveisPage'
@@ -30,6 +31,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/definir-senha" element={<DefinirSenhaPage />} />
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<DashboardPage />} />
             <Route path="imoveis" element={<ImoveisPage />} />

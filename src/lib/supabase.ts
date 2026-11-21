@@ -45,6 +45,12 @@ function validarConfiguracao(): string | null {
 
 export const erroConfiguracao = validarConfiguracao()
 
+/**
+ * Tipo do link de e-mail que abriu o app: "invite" (convite) ou "recovery"
+ * (esqueci minha senha). Lido ANTES de criar o cliente, que limpa o endereço.
+ */
+export const tipoLinkEmail: string | null = new URLSearchParams(window.location.hash.slice(1)).get('type')
+
 export const supabase = createClient(
   erroConfiguracao ? 'https://invalido.supabase.co' : url!,
   erroConfiguracao ? 'invalido' : key!,

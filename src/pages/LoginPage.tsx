@@ -11,6 +11,7 @@ export function LoginPage() {
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
+  const [info, setInfo] = useState<string | null>(null)
 
   const destino = (location.state as { de?: string } | null)?.de ?? '/'
   if (sessao) return <Navigate to={destino} replace />
@@ -25,6 +26,17 @@ export function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha })
     setEnviando(false)
     if (error) setErro(mensagemDeErro(error))
+  }
+
+  async function esqueciSenha() {
+    setErro(null)
+    setInfo(null)
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setErro('Digite seu e-mail no campo acima e clique de novo em “Esqueci minha senha”.')
+    setEnviando(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin })
+    setEnviando(false)
+    if (error) setErro(mensagemDeErro(error))
+    else setInfo('Se esse e-mail estiver cadastrado, você vai receber um link para criar uma nova senha. Veja também a caixa de spam.')
   }
 
   return (
@@ -42,7 +54,7 @@ export function LoginPage() {
       </div>
       <form className="login__cartao" onSubmit={entrar} noValidate>
         <h1 className="login__titulo">Entrar</h1>
-        <p className="texto-suave">Use o usuário cadastrado no Supabase.</p>
+        <p className="texto-suave">Entre com seu e-mail e senha.</p>
 
         <label className="campo">
           <span>E-mail</span>
@@ -54,10 +66,16 @@ export function LoginPage() {
         </label>
 
         {erro && <p className="alerta alerta--erro" role="alert">{erro}</p>}
+        {info && <p className="alerta alerta--ok" role="status">{info}</p>}
 
         <button className="botao botao--primario botao--largo" type="submit" disabled={enviando}>
-          {enviando ? 'Entrando…' : 'Entrar'}
+          {enviando ? 'Aguarde…' : 'Entrar'}
         </button>
+        <p className="rodape-secao" style={{ textAlign: 'center' }}>
+          <button type="button" className="botao botao--discreto botao--pequeno" onClick={esqueciSenha} disabled={enviando}>
+            Esqueci minha senha
+          </button>
+        </p>
       </form>
     </div>
   )

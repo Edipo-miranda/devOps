@@ -9,6 +9,11 @@ export function mensagemDeErro(erro: unknown): string {
   }
   if (/Invalid login credentials/i.test(msg)) return 'E-mail ou senha incorretos.'
   if (/Email not confirmed/i.test(msg)) return 'Confirme seu e-mail antes de entrar (veja sua caixa de entrada).'
+  if (/rate limit|too many requests/i.test(msg)) return 'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.'
+  if (/Email address .* not authorized|not authorized to send/i.test(msg)) {
+    return 'O Supabase ainda não está configurado para enviar e-mails para esse endereço. Peça ao administrador para trocar sua senha.'
+  }
+  if (/Password should be|weak password/i.test(msg)) return 'Senha fraca. Use pelo menos 8 caracteres, com letras e números.'
   if (/Invalid path specified/i.test(msg)) {
     return 'A URL do Supabase está com um caminho a mais. Use só https://xxxx.supabase.co, sem /rest/v1 no final.'
   }

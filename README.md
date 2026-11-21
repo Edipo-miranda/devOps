@@ -248,6 +248,26 @@ Depois de publicado na Vercel (endereço `https://...vercel.app`):
 O ícone "Aluguéis" aparece na tela inicial e o app abre em tela cheia. Ele precisa de internet
 (os dados ficam no Supabase) e se atualiza sozinho a cada nova publicação.
 
+## Dar acesso a outra pessoa
+
+Cada usuário tem **seus próprios dados**: um não vê nada do outro (RLS no banco). A nova pessoa começa com o sistema vazio.
+
+1. Supabase → **Authentication → Users → Add user → Create new user**: e-mail da pessoa, uma **senha
+   provisória** qualquer e **Auto Confirm User** marcado.
+2. Supabase → **SQL Editor**, rode (trocando o e-mail):
+   ```sql
+   update auth.users
+      set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || '{"trocar_senha": true}'
+    where email = 'email.da.pessoa@exemplo.com';
+   ```
+3. Envie para a pessoa o endereço do app, o e-mail e a senha provisória. No primeiro acesso, o app abre a tela
+   **"Crie sua senha"** e só libera o uso depois que ela criar a própria senha. Você não fica sabendo a senha nova.
+
+A senha também pode ser trocada a qualquer momento em **Configurações → Minha conta**.
+"Esqueci minha senha" (na tela de login) envia um link por e-mail — no plano gratuito, o Supabase só envia
+e-mails para os membros do próprio projeto; para outras pessoas é preciso configurar um SMTP
+(**Authentication → Emails → SMTP Settings**).
+
 ## Comandos
 
 | Comando | O que faz |
