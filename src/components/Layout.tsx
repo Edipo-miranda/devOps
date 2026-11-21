@@ -1,8 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 
-// As telas Dashboard, Imóveis e Recebimentos entram aqui na Etapa 2.
-const LINKS = [{ para: '/', rotulo: 'Verificação' }]
+const LINKS = [
+  { para: '/', rotulo: 'Dashboard', exato: true },
+  { para: '/imoveis', rotulo: 'Imóveis', exato: false },
+  { para: '/recebimentos', rotulo: 'Recebimentos', exato: false },
+]
 
 export function Layout() {
   const { sessao, sair } = useAuth()
@@ -14,7 +17,7 @@ export function Layout() {
           <span className="topo__marca">Controle de Aluguéis</span>
           <nav className="topo__nav">
             {LINKS.map((l) => (
-              <NavLink key={l.para} to={l.para} end className="topo__link">
+              <NavLink key={l.para} to={l.para} end={l.exato} className="topo__link">
                 {l.rotulo}
               </NavLink>
             ))}
@@ -28,6 +31,9 @@ export function Layout() {
       <main className="conteudo">
         <Outlet />
       </main>
+      <footer className="rodape">
+        <NavLink to="/verificacao">Verificar conexão com o banco</NavLink>
+      </footer>
     </div>
   )
 }

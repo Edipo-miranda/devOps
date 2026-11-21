@@ -6,8 +6,9 @@ Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e i
 - **Banco de dados e login:** Supabase (PostgreSQL + Supabase Auth)
 - **Publicação:** Vercel (plano gratuito)
 
-> **Situação atual: Etapa 1 concluída** — estrutura do projeto, banco de dados, segurança (RLS),
-> login e uma tela de verificação da conexão. As telas Dashboard, Imóveis e Recebimentos são a Etapa 2.
+> **Situação atual: Etapa 2** — telas de Dashboard, Imóveis e inquilinos e Recebimentos prontas.
+> Antes de usar, execute também o script `0002_funcoes_cadastro.sql` no Supabase (veja
+> [Atualizar para a Etapa 2](#atualizar-para-a-etapa-2)).
 
 ---
 
@@ -16,10 +17,14 @@ Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e i
 ```
 ├── supabase/
 │   ├── migrations/0001_schema_inicial.sql   ← cria tabelas, regras, segurança e funções
-│   └── tests/0001_verificar_banco.sql       ← testa o banco e apaga tudo que criou
+│   ├── migrations/0002_funcoes_cadastro.sql ← cadastro "tudo ou nada" e encerramento de locação
+│   ├── tests/0001_verificar_banco.sql       ← testa o banco e apaga tudo que criou
+│   └── tests/0002_verificar_funcoes_cadastro.sql
 ├── src/
 │   ├── lib/supabase.ts       ← conexão com o Supabase (só chave pública)
 │   ├── lib/erros.ts          ← traduz erros para mensagens em português
+│   ├── lib/api.ts            ← todas as leituras e gravações no banco
+│   ├── lib/format.ts         ← moeda, datas e fuso de Brasília
 │   ├── auth/                 ← controle de login (sessão do usuário)
 │   ├── components/Layout.tsx ← topo e menu de navegação
 │   ├── pages/                ← uma tela por arquivo
@@ -74,6 +79,14 @@ Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e i
 - `gerar_recebimentos_mes(ano, mes)` — cria os lançamentos do mês para todas as locações vigentes
   naquele mês. Pode ser chamada várias vezes: só cria o que ainda não existe.
 - `resumo_mes(ano, mes)` — totais do Dashboard (previsto, recebido, pendente, atrasados).
+- `cadastrar_imovel(...)` e `registrar_locacao(...)` — gravam imóvel, inquilino e locação de uma vez
+  (se algo falhar, nada é gravado).
+- `encerrar_locacao(id, data_saida)` — registra a saída e remove apenas lançamentos **sem pagamento**
+  de meses **posteriores** ao mês da saída.
+
+**Quando os lançamentos são criados:** ao abrir o aplicativo, os lançamentos do **mês atual** são criados
+automaticamente (sem duplicar). Para meses passados ou futuros, use o botão
+**Gerar lançamentos de &lt;mês&gt;** na tela Recebimentos.
 
 **Segurança (RLS):** cada usuário só vê e altera os próprios registros. Visitantes não logados não
 acessam nada. As chaves estrangeiras compostas impedem ligar um imóvel de um usuário a um inquilino
@@ -147,9 +160,41 @@ Abra o endereço mostrado (normalmente <http://localhost:5173>), entre com o usu
 tela **Verificação da conexão**. Todos os itens devem aparecer como **OK**. Se algum der erro, a
 mensagem explica o motivo (ex.: SQL não executado, chave errada).
 
-**Me avise quando chegar aqui** — com a conexão confirmada, sigo para a Etapa 2 (telas).
 
 ---
+
+## Atualizar para a Etapa 2
+
+1. No terminal do VS Code (com o app parado — **Ctrl + C**), baixe a atualização e instale:
+   ```
+   git pull
+   npm install
+   ```
+2. No Supabase, **SQL Editor → New query**, cole todo o arquivo
+   `supabase/migrations/0002_funcoes_cadastro.sql` e clique em **Run** → *Success*.
+3. Numa nova query, cole `supabase/tests/0002_verificar_funcoes_cadastro.sql` e clique em **Run** →
+   devem aparecer **11 linhas OK**.
+4. Rode `npm run dev`, entre e abra o link **Verificar conexão com o banco** (no rodapé): todos os itens OK,
+   inclusive **Funções de cadastro (script 0002)**.
+
+## Roteiro de teste com dados reais
+
+Use os seus imóveis de verdade (não é preciso inventar dados). Siga na ordem e confira cada resultado:
+
+| # | Faça | Resultado esperado |
+|---|---|---|
+| 1 | Imóveis → **+ Novo imóvel**, marque "está alugado", preencha e salve | Abre a página do imóvel com a locação atual |
+| 2 | Salve o formulário vazio | Mensagens em vermelho em cada campo obrigatório |
+| 3 | Cadastre um imóvel com a **mesma identificação** | Aviso de imóvel duplicado |
+| 4 | Recebimentos (mês atual) | O lançamento do imóvel aparece com valor e vencimento |
+| 5 | Clique em **Gerar lançamentos** de novo | "Nenhum lançamento novo" (não duplica) |
+| 6 | **Registrar pagamento** com valor e data | Situação muda para **Pago**; Dashboard atualiza os totais |
+| 7 | No imóvel, **Editar valor/vencimento** com outro valor | Lançamentos já existentes **não mudam** |
+| 8 | Recebimentos → próximo mês → **Gerar lançamentos** | Novo mês usa o **novo** valor |
+| 9 | **Encerrar locação** e depois **+ Cadastrar inquilino** | O antigo vai para "Histórico de ocupações"; recebimentos antigos continuam |
+| 10 | Busca por parte do nome do inquilino ou do imóvel | Filtra a lista |
+
+Um lançamento com vencimento já passado e sem pagamento aparece como **Atrasado** (data de Brasília).
 
 ## 4. Publicar na Vercel (quando o app estiver pronto)
 

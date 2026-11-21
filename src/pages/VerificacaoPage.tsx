@@ -45,6 +45,23 @@ export function VerificacaoPage() {
         : { nome: 'Função resumo_mes()', estado: 'ok' },
     )
 
+    // Funções da Etapa 2 (0002_funcoes_cadastro.sql). Chamada com um id inexistente:
+    // se a função existir, responde "Locação não encontrada" e nada é alterado.
+    const { error: erroEncerrar } = await supabase.rpc('encerrar_locacao', {
+      p_locacao_id: '00000000-0000-0000-0000-000000000000',
+      p_data_saida: '2000-01-01',
+    })
+    const existe = erroEncerrar?.code === 'P0001'
+    resultados.push(
+      existe
+        ? { nome: 'Funções de cadastro (script 0002)', estado: 'ok' }
+        : {
+            nome: 'Funções de cadastro (script 0002)',
+            estado: 'erro',
+            detalhe: erroEncerrar ? mensagemDeErro(erroEncerrar) : 'Resposta inesperada do banco.',
+          },
+    )
+
     return resultados
   }, [])
 

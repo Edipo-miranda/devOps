@@ -5,6 +5,10 @@ import { Layout } from './components/Layout'
 import { erroConfiguracao } from './lib/supabase'
 import { LoginPage } from './pages/LoginPage'
 import { VerificacaoPage } from './pages/VerificacaoPage'
+import { DashboardPage } from './pages/DashboardPage'
+import { ImoveisPage } from './pages/ImoveisPage'
+import { ImovelDetalhePage } from './pages/ImovelDetalhePage'
+import { RecebimentosPage } from './pages/RecebimentosPage'
 
 export default function App() {
   if (erroConfiguracao) {
@@ -25,7 +29,11 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
-            <Route index element={<VerificacaoPage />} />
+            <Route index element={<DashboardPage />} />
+            <Route path="imoveis" element={<ImoveisPage />} />
+            <Route path="imoveis/:id" element={<ImovelDetalhePage />} />
+            <Route path="recebimentos" element={<RecebimentosPage />} />
+            <Route path="verificacao" element={<VerificacaoPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
