@@ -4,8 +4,8 @@ import { Aviso, type AvisoDados } from '../components/Aviso'
 import { ListaAvisos } from '../components/ListaAvisos'
 import { aoAlterarDados } from '../lib/eventos'
 import { FiltroPeriodo } from '../components/FiltroPeriodo'
-import { contarAtrasadosGeral, garantirMesAtual, listarAvisos, listarRecebimentos, resumoMes } from '../lib/api'
-import { MESES, formatarData, formatarMoeda, mesAtualBrasil } from '../lib/format'
+import { contarAtrasadosGeral, garantirMesAtual, listarAvisos, listarDespesas, listarRecebimentos, resumoMes } from '../lib/api'
+import { MESES, formatarData, formatarMoeda, inicioDoMes, mesAtualBrasil, ultimoDiaDoMes } from '../lib/format'
 import { useCarregar } from '../lib/useCarregar'
 import { SeloSituacao } from '../components/SeloSituacao'
 import { IconeAlerta, IconeAlvo, IconeCheck, IconeRelogio } from '../components/Icones'
@@ -23,13 +23,15 @@ function AbaMes() {
 
   const { dados, erro, carregando, recarregar } = useCarregar(async () => {
     await garantirMesAtual()
-    const [resumo, pendentes, atrasadosGeral, avisos] = await Promise.all([
+    const inicio = inicioDoMes(ano, mes)
+    const [resumo, pendentes, atrasadosGeral, avisos, despesas] = await Promise.all([
       resumoMes(ano, mes),
       listarRecebimentos({ ano, mes, situacao: null }),
       contarAtrasadosGeral(),
       listarAvisos(),
+      listarDespesas({ de: inicio, ate: ultimoDiaDoMes(ano, mes) }),
     ])
-    return { resumo, pendentes: pendentes.filter((r) => r.situacao !== 'pago'), atrasadosGeral, avisos }
+    return { resumo, pendentes: pendentes.filter((r) => r.situacao !== 'pago'), atrasadosGeral, avisos, despesas }
   }, [ano, mes])
 
   useEffect(() => aoAlterarDados(recarregar), [recarregar])
@@ -89,6 +91,23 @@ function AbaMes() {
           <span className="indicador__rodape">vencidos e sem pagamento</span>
         </Link>
       </div>
+
+      {dados && r && (() => {
+        const totalDespesas = dados.despesas.reduce((soma, d) => soma + d.valor, 0)
+        const resultado = r.total_recebido - totalDespesas
+        return (
+          <div className="resultado-mes">
+            <div><span>Recebido no mês</span><strong className="texto-ok">{formatarMoeda(r.total_recebido)}</strong></div>
+            <div>
+              <span>Despesas no mês</span>
+              <strong className="texto-erro">− {formatarMoeda(totalDespesas)}</strong>
+              <small className="texto-suave">{dados.despesas.length} lançamento(s)</small>
+            </div>
+            <div><span>Resultado do mês</span><strong className={resultado < 0 ? 'texto-erro' : ''}>{formatarMoeda(resultado)}</strong></div>
+            <Link to="/relatorios" className="resultado-mes__link">Ver relatórios →</Link>
+          </div>
+        )
+      })()}
 
       {dados && dados.atrasadosGeral.quantidade > 0 && (
         <Link to="/recebimentos?situacao=atrasado&todos=1" className="faixa-alerta">

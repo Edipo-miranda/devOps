@@ -13,6 +13,15 @@ export interface LinhaMes {
   total: number
   dedutiveis: number
   base: number // total recebido − despesas dedutíveis
+  despesas: number // todas as despesas pagas no mês
+  lucro: number // total recebido − todas as despesas
+}
+
+export interface LinhaCategoria {
+  categoria: string
+  quantidade: number
+  total: number
+  dedutivel: number
 }
 
 export interface LinhaPagador {
@@ -33,6 +42,7 @@ export interface Relatorio {
   meses: LinhaMes[]
   pagadores: LinhaPagador[]
   imoveis: LinhaImovel[]
+  categorias: LinhaCategoria[]
   recebimentos: RecebimentoDetalhado[]
   despesas: (Despesa & { imovel: string })[]
   totais: { aluguel: number; encargos: number; total: number; dedutiveis: number; base: number; despesas: number; lucro: number }
@@ -45,7 +55,8 @@ export function calcularRelatorio(
   despesas: Despesa[],
   nomeImovel: (id: string) => string,
 ): Relatorio {
-  const meses: LinhaMes[] = MESES.map((nome, i) => ({ mes: i + 1, nome, aluguel: 0, encargos: 0, total: 0, dedutiveis: 0, base: 0 }))
+  const meses: LinhaMes[] = MESES.map((nome, i) => ({ mes: i + 1, nome, aluguel: 0, encargos: 0, total: 0, dedutiveis: 0, base: 0, despesas: 0, lucro: 0 }))
+  const categorias = new Map<string, LinhaCategoria>()
   const pagadores = new Map<string, LinhaPagador & { mesesSet: Set<number> }>()
   const imoveis = new Map<string, LinhaImovel>()
   const imovel = (id: string) => {
@@ -71,11 +82,20 @@ export function calcularRelatorio(
   for (const d of despesas) {
     const m = Number(d.data.slice(5, 7)) - 1
     if (d.dedutivel) meses[m].dedutiveis += d.valor
+    meses[m].despesas += d.valor
     imovel(d.imovel_id).despesas += d.valor
+    const rotulo = CATEGORIAS_DESPESA[d.categoria].rotulo
+    const c = categorias.get(rotulo) ?? { categoria: rotulo, quantidade: 0, total: 0, dedutivel: 0 }
+    c.quantidade += 1
+    c.total += d.valor
+    if (d.dedutivel) c.dedutivel += d.valor
+    categorias.set(rotulo, c)
   }
   for (const m of meses) {
     m.aluguel = r2(m.aluguel); m.encargos = r2(m.encargos); m.total = r2(m.total); m.dedutiveis = r2(m.dedutiveis)
     m.base = r2(Math.max(0, m.total - m.dedutiveis))
+    m.despesas = r2(m.despesas)
+    m.lucro = r2(m.total - m.despesas)
   }
   const listaImoveis = [...imoveis.values()].map((i) => ({ ...i, recebido: r2(i.recebido), despesas: r2(i.despesas), lucro: r2(i.recebido - i.despesas) }))
     .sort((a, b) => a.imovel.localeCompare(b.imovel))
@@ -87,6 +107,7 @@ export function calcularRelatorio(
     pagadores: [...pagadores.values()].map(({ mesesSet, ...p }) => ({ ...p, meses: mesesSet.size, total: r2(p.total) }))
       .sort((a, b) => b.total - a.total),
     imoveis: listaImoveis,
+    categorias: [...categorias.values()].map((c) => ({ ...c, total: r2(c.total), dedutivel: r2(c.dedutivel) })).sort((a, b) => b.total - a.total),
     recebimentos: recebimentos.filter((r) => r.data_pagamento),
     despesas: despesas.map((d) => ({ ...d, imovel: nomeImovel(d.imovel_id) })),
     totais: {
@@ -105,6 +126,15 @@ export const COLUNAS_MESES: Coluna<LinhaMes>[] = [
   { titulo: 'Total recebido', valor: (m) => m.total, tipo: 'moeda' },
   { titulo: 'Despesas dedutíveis', valor: (m) => m.dedutiveis, tipo: 'moeda' },
   { titulo: 'Base (recebido − dedutíveis)', valor: (m) => m.base, tipo: 'moeda' },
+  { titulo: 'Todas as despesas', valor: (m) => m.despesas, tipo: 'moeda' },
+  { titulo: 'Lucro do mês', valor: (m) => m.lucro, tipo: 'moeda' },
+]
+
+export const COLUNAS_CATEGORIAS: Coluna<LinhaCategoria>[] = [
+  { titulo: 'Categoria', valor: (c) => c.categoria, largura: 34 },
+  { titulo: 'Lançamentos', valor: (c) => c.quantidade, tipo: 'numero' },
+  { titulo: 'Total gasto', valor: (c) => c.total, tipo: 'moeda' },
+  { titulo: 'Parte dedutível', valor: (c) => c.dedutivel, tipo: 'moeda' },
 ]
 
 export const COLUNAS_PAGADORES: Coluna<LinhaPagador>[] = [
@@ -151,8 +181,9 @@ export function secoesRelatorio(rel: Relatorio): SecaoPdf<any>[] {
       texto: 'Valores pelo mês do pagamento (regime de caixa). Despesas dedutíveis conforme marcadas no cadastro — confirme com o contador.',
       colunas: COLUNAS_MESES,
       linhas: rel.meses,
-      totais: ['Total', t.aluguel, t.encargos, t.total, t.dedutiveis, t.base],
+      totais: ['Total', t.aluguel, t.encargos, t.total, t.dedutiveis, t.base, t.despesas, t.lucro],
     },
+    { titulo: 'Despesas por categoria', colunas: COLUNAS_CATEGORIAS, linhas: rel.categorias, totais: ['Total', rel.despesas.length, t.despesas, t.dedutiveis] },
     { titulo: 'Pagadores (inquilinos)', colunas: COLUNAS_PAGADORES, linhas: rel.pagadores, totais: ['Total', '', '', t.total] },
     { titulo: 'Resultado por imóvel', colunas: COLUNAS_IMOVEIS, linhas: rel.imoveis, totais: ['Total', t.total, t.despesas, t.lucro] },
     { titulo: 'Despesas do ano', colunas: COLUNAS_DESPESAS, linhas: rel.despesas, totais: ['', '', '', '', 'Total', t.despesas] },

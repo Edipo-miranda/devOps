@@ -5,6 +5,7 @@ import { exportarExcel, exportarPdf } from '../lib/exportar'
 import { formatarMoeda, hojeBrasil } from '../lib/format'
 import { mensagemDeErro } from '../lib/erros'
 import {
+  COLUNAS_CATEGORIAS,
   COLUNAS_DESPESAS,
   COLUNAS_IMOVEIS,
   COLUNAS_MESES,
@@ -65,6 +66,7 @@ export function RelatoriosPage() {
     { nome: 'Mês a mês', colunas: COLUNAS_MESES, linhas: rel!.meses },
     { nome: 'Pagadores', colunas: COLUNAS_PAGADORES, linhas: rel!.pagadores },
     { nome: 'Por imóvel', colunas: COLUNAS_IMOVEIS, linhas: rel!.imoveis },
+    { nome: 'Despesas por categoria', colunas: COLUNAS_CATEGORIAS, linhas: rel!.categorias },
     { nome: 'Recebimentos', colunas: COLUNAS_RECEBIMENTOS, linhas: rel!.recebimentos },
     { nome: 'Despesas', colunas: COLUNAS_DESPESAS, linhas: rel!.despesas },
   ]))
@@ -174,6 +176,8 @@ export function RelatoriosPage() {
                     <td data-rotulo="Total recebido" className="num">{formatarMoeda(m.total)}</td>
                     <td data-rotulo="Dedutíveis" className="num">{formatarMoeda(m.dedutiveis)}</td>
                     <td data-rotulo="Base" className="num destaque">{formatarMoeda(m.base)}</td>
+                    <td data-rotulo="Todas as despesas" className="num">{formatarMoeda(m.despesas)}</td>
+                    <td data-rotulo="Lucro do mês" className={`num destaque ${m.lucro < 0 ? 'texto-erro' : ''}`}>{formatarMoeda(m.lucro)}</td>
                   </tr>
                 ))}
                 <tr className="linha-total">
@@ -183,6 +187,8 @@ export function RelatoriosPage() {
                   <td data-rotulo="Total recebido" className="num">{formatarMoeda(t.total)}</td>
                   <td data-rotulo="Dedutíveis" className="num">{formatarMoeda(t.dedutiveis)}</td>
                   <td data-rotulo="Base" className="num">{formatarMoeda(t.base)}</td>
+                  <td data-rotulo="Todas as despesas" className="num">{formatarMoeda(t.despesas)}</td>
+                  <td data-rotulo="Lucro do mês" className="num">{formatarMoeda(t.lucro)}</td>
                 </tr>
               </tbody>
             </table>
@@ -229,6 +235,31 @@ export function RelatoriosPage() {
               )}
             </div>
           </div>
+          <h2 className="titulo-secao">Despesas por categoria</h2>
+          {rel.categorias.length === 0 ? <p className="vazio">Nenhuma despesa lançada em {ano}.</p> : (
+            <div className="tabela-container">
+              <table className="tabela tabela--responsiva">
+                <thead><tr><th>Categoria</th><th className="num">Lançamentos</th><th className="num">Total gasto</th><th className="num">Parte dedutível</th></tr></thead>
+                <tbody>
+                  {rel.categorias.map((c) => (
+                    <tr key={c.categoria}>
+                      <td data-rotulo="Categoria" className="destaque">{c.categoria}</td>
+                      <td data-rotulo="Lançamentos" className="num">{c.quantidade}</td>
+                      <td data-rotulo="Total gasto" className="num">{formatarMoeda(c.total)}</td>
+                      <td data-rotulo="Parte dedutível" className="num">{formatarMoeda(c.dedutivel)}</td>
+                    </tr>
+                  ))}
+                  <tr className="linha-total">
+                    <td data-rotulo="Total">Total</td>
+                    <td data-rotulo="Lançamentos" className="num">{rel.despesas.length}</td>
+                    <td data-rotulo="Total gasto" className="num">{formatarMoeda(t.despesas)}</td>
+                    <td data-rotulo="Parte dedutível" className="num">{formatarMoeda(t.dedutiveis)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+
           <p className="texto-suave texto-pequeno" style={{ marginTop: 14 }}>
             Valores pelo mês do pagamento. Lance as despesas (IPTU, condomínio, manutenção…) na página de cada imóvel.
             Este relatório é um apoio: confirme deduções e obrigações com seu contador.

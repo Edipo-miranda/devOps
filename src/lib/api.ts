@@ -537,10 +537,12 @@ export async function excluirImovel(id: string): Promise<void> {
 
 export type DadosDespesa = Pick<Despesa, 'imovel_id' | 'data' | 'categoria' | 'descricao' | 'valor' | 'dedutivel'>
 
-export async function listarDespesas(filtro: { imovelId?: string; ano?: number }): Promise<Despesa[]> {
+export async function listarDespesas(filtro: { imovelId?: string; ano?: number; de?: string; ate?: string }): Promise<Despesa[]> {
   let q = supabase.from('despesas').select('*')
   if (filtro.imovelId) q = q.eq('imovel_id', filtro.imovelId)
   if (filtro.ano) q = q.gte('data', `${filtro.ano}-01-01`).lte('data', `${filtro.ano}-12-31`)
+  if (filtro.de) q = q.gte('data', filtro.de)
+  if (filtro.ate) q = q.lte('data', filtro.ate)
   const { data, error } = await q.order('data', { ascending: false })
   if (error) throw error
   return ((data ?? []) as Despesa[]).map((d) => ({ ...d, valor: Number(d.valor) }))
@@ -548,6 +550,13 @@ export async function listarDespesas(filtro: { imovelId?: string; ano?: number }
 
 export async function salvarDespesa(id: string | null, dados: DadosDespesa): Promise<void> {
   const { error } = id ? await supabase.from('despesas').update(dados).eq('id', id) : await supabase.from('despesas').insert(dados)
+  if (error) throw error
+  notificarAlteracao()
+}
+
+/** Lança várias despesas de uma vez (tudo ou nada). */
+export async function salvarDespesasEmLote(itens: DadosDespesa[]): Promise<void> {
+  const { error } = await supabase.from('despesas').insert(itens)
   if (error) throw error
   notificarAlteracao()
 }

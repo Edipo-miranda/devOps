@@ -441,10 +441,11 @@ a.botao { text-decoration: none; display: inline-block; }
 .grafico__cor { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
 .grafico__cor--previsto, .grafico__barra--previsto { background: #cbd5e1; }
 .grafico__cor--recebido, .grafico__barra--recebido { background: var(--primaria); }
+.grafico__cor--despesas, .grafico__barra--despesas { background: #f87171; }
 .grafico__barras { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; height: 190px; align-items: end; }
 .grafico__mes { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; text-decoration: none; }
 .grafico__colunas { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 3px; }
-.grafico__barra { width: 42%; max-width: 18px; min-height: 2px; border-radius: 5px 5px 2px 2px; transition: filter 0.15s; }
+.grafico__barra { width: 30%; max-width: 14px; min-height: 2px; border-radius: 5px 5px 2px 2px; transition: filter 0.15s; }
 .grafico__mes:hover .grafico__barra { filter: brightness(0.9); }
 .grafico__rotulo { font-size: 0.7rem; font-weight: 600; color: var(--texto-suave); text-transform: capitalize; }
 
@@ -471,6 +472,24 @@ a.botao { text-decoration: none; display: inline-block; }
 /* Ações empilhadas na tabela de recebimentos */
 .acoes__grupo { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 230px; margin-left: auto; }
 .acoes__grupo .botao, .tabela td.acoes .acoes__grupo a.botao { margin: 0; }
+
+/* Várias despesas no mesmo formulário */
+.item-despesa { border: 1px solid var(--borda); border-radius: 12px; padding: 12px 14px 8px; margin-bottom: 12px; background: var(--superficie-2); }
+.grade-despesa { display: grid; grid-template-columns: 1.3fr 0.8fr 1.3fr; gap: 0 12px; }
+.item-despesa__rodape { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: -6px; }
+
+/* Recebido − despesas = resultado (Dashboard) */
+.resultado-mes {
+  display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: 12px; align-items: stretch; margin-top: 16px;
+}
+.resultado-mes > div {
+  background: var(--superficie); border: 1px solid var(--borda); border-radius: 14px; padding: 12px 16px;
+  display: flex; flex-direction: column; gap: 2px; box-shadow: var(--sombra);
+}
+.resultado-mes span { font-size: 0.78rem; color: var(--texto-suave); font-weight: 600; }
+.resultado-mes strong { font-size: 1.15rem; }
+.resultado-mes small { font-size: 0.72rem; }
+.resultado-mes__link { align-self: center; font-weight: 700; font-size: 0.85rem; text-decoration: none; white-space: nowrap; }
 
 /* WhatsApp */
 .botao--whatsapp {
@@ -561,6 +580,9 @@ a.botao { text-decoration: none; display: inline-block; }
   .indicador__valor { font-size: 1.15rem; }
   .grade-2, .grade-3, .resumo-lancamento { grid-template-columns: 1fr; }
   .grade-4 { grid-template-columns: 1fr 1fr; }
+  .grade-despesa { grid-template-columns: 1fr; }
+  .resultado-mes { grid-template-columns: 1fr 1fr; }
+  .resultado-mes__link { grid-column: 1 / -1; }
   .resultado-ano, .resultado-ano--4 { grid-template-columns: 1fr 1fr; }
   .grade-relatorios { grid-template-columns: 1fr; }
   .dados-grade--4 { grid-template-columns: 1fr 1fr; }

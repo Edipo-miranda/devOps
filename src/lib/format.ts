@@ -42,6 +42,12 @@ export function mesAtualBrasil(): { ano: number; mes: number } {
   return { ano: Number(a), mes: Number(m) }
 }
 
+/** Último dia do mês, no formato "AAAA-MM-DD". */
+export function ultimoDiaDoMes(ano: number, mes: number): string {
+  const d = new Date(Date.UTC(ano, mes, 0)).getUTCDate()
+  return `${ano}-${String(mes).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
 /** Primeiro dia do mês, no formato "AAAA-MM-01". */
 export function inicioDoMes(ano: number, mes: number): string {
   return `${ano}-${String(mes).padStart(2, '0')}-01`
