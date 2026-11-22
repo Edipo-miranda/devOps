@@ -129,7 +129,19 @@ function semQuebra(texto: string): Content[] {
 
 // -------------------------------------------------------------- documento
 
-export function montarContrato(d: DadosContrato, op: OpcoesContrato): TDocumentDefinitions {
+/** Texto do contrato, separado da formatação do PDF, para poder ser editado e salvo como modelo. */
+export interface TextoContrato {
+  titulo: string
+  subtitulo: string
+  tituloAbertura: string
+  partes: string[] // qualificação das partes e parágrafo de abertura ("LOCADOR: ..." deixa o rótulo em negrito)
+  clausulas: { titulo: string; paragrafos: string[] }[]
+  tituloFinais: string
+  finais: string[]
+}
+
+/** Contrato padrão (modelo revisado, Lei nº 8.245/1991) com os dados da locação. */
+export function textoPadraoContrato(d: DadosContrato, op: Pick<OpcoesContrato, 'primeiroPagamento'>): TextoContrato {
   const { imovel, proprietario, locacao } = d
   const inq = locacao.inquilino
   const residencial = locacao.finalidade !== 'comercial'
@@ -334,11 +346,41 @@ export function montarContrato(d: DadosContrato, op: OpcoesContrato): TDocumentD
   // Foro
   add('DO FORO', `Fica eleito o foro da Comarca de ${foro} para dirimir questões decorrentes deste contrato, ressalvadas as regras legais de competência.`)
 
-  // ------------------------------------------------------------ PDF
+  return {
+    titulo: `CONTRATO DE LOCAÇÃO DE IMÓVEL ${residencial ? 'RESIDENCIAL' : 'COMERCIAL'}`,
+    subtitulo: 'Lei nº 8.245/1991 (Lei do Inquilinato)',
+    tituloAbertura: 'QUALIFICAÇÃO DAS PARTES',
+    partes: [
+      `LOCADOR: ${locador}.`,
+      `LOCATÁRIO: ${locatario}.`,
+      `As partes celebram o presente contrato de locação ${tipoLocacao}, que será regido pela Lei nº 8.245/1991 e pelas cláusulas abaixo.`,
+    ],
+    clausulas,
+    tituloFinais: 'DISPOSIÇÕES FINAIS',
+    finais: [
+      `E, por estarem de acordo, as partes assinam este instrumento em ${temFiador ? 'três' : 'duas'} vias de igual teor, ` +
+        'juntamente com duas testemunhas, ou por meio eletrônico que permita comprovar autoria e integridade.',
+    ],
+  }
+}
+
+/** Parágrafo com rótulo ("LOCADOR: ...") fica com o rótulo em negrito e alinhado à esquerda. */
+function paragrafoPdf(p: string): Content {
+  const m = /^([A-ZÁÂÃÉÊÍÓÔÕÚÇ() ]{3,40}):\s/.exec(p)
+  if (m) return { text: [{ text: `${m[1]}: `, bold: true }, ...semQuebra(p.slice(m[0].length))], style: 'paragrafo', alignment: 'left' }
+  return { text: semQuebra(p), style: 'paragrafo' }
+}
+
+/** Monta o PDF a partir do texto (padrão, editado ou de um modelo). Assinaturas e data vêm dos dados. */
+export function montarPdfContrato(texto: TextoContrato, d: DadosContrato, op: OpcoesContrato): TDocumentDefinitions {
+  const { imovel, proprietario, locacao } = d
+  const inq = locacao.inquilino
+  const temFiador = locacao.garantia === 'fiador'
+  const cidadeImovel = [imovel.cidade, imovel.uf].filter(Boolean).join('/')
   const corpo: Content[] = []
-  clausulas.forEach((c, i) => {
-    corpo.push({ text: `CLÁUSULA ${i + 1}ª – ${c.titulo}`, style: 'titulo2' })
-    c.paragrafos.forEach((p) => corpo.push({ text: semQuebra(p), style: 'paragrafo' }))
+  texto.clausulas.forEach((c, i) => {
+    corpo.push({ text: `CLÁUSULA ${i + 1}ª – ${c.titulo.toUpperCase()}`, style: 'titulo2' })
+    c.paragrafos.filter((p) => p.trim()).forEach((p) => corpo.push(paragrafoPdf(p.trim())))
   })
 
   const [t1, t2] = op.testemunhas
@@ -368,24 +410,13 @@ export function montarContrato(d: DadosContrato, op: OpcoesContrato): TDocumentD
       paragrafo: { margin: [0, 0, 0, 6] },
     },
     content: [
-      { text: `CONTRATO DE LOCAÇÃO DE IMÓVEL ${residencial ? 'RESIDENCIAL' : 'COMERCIAL'}`, style: 'titulo' },
-      { text: 'Lei nº 8.245/1991 (Lei do Inquilinato)', style: 'subtitulo' },
-      { text: 'QUALIFICAÇÃO DAS PARTES', style: 'titulo2', margin: [0, 0, 0, 4] },
-      // Qualificação alinhada à esquerda: as lacunas longas deixariam espaços enormes no texto justificado.
-      { text: [{ text: 'LOCADOR: ', bold: true }, ...semQuebra(`${locador}.`)], style: 'paragrafo', alignment: 'left' },
-      { text: [{ text: 'LOCATÁRIO: ', bold: true }, ...semQuebra(`${locatario}.`)], style: 'paragrafo', alignment: 'left' },
-      {
-        text: `As partes celebram o presente contrato de locação ${tipoLocacao}, que será regido pela Lei nº 8.245/1991 e pelas cláusulas abaixo.`,
-        style: 'paragrafo',
-        margin: [0, 4, 0, 6],
-      },
+      { text: texto.titulo, style: 'titulo' },
+      texto.subtitulo ? { text: texto.subtitulo, style: 'subtitulo' } : { text: '', margin: [0, 0, 0, 12] },
+      texto.tituloAbertura ? { text: texto.tituloAbertura, style: 'titulo2', margin: [0, 0, 0, 4] } : { text: '' },
+      ...texto.partes.filter((p) => p.trim()).map((p) => paragrafoPdf(p.trim())),
       ...corpo,
-      { text: 'DISPOSIÇÕES FINAIS', style: 'titulo2' },
-      {
-        text: `E, por estarem de acordo, as partes assinam este instrumento em ${temFiador ? 'três' : 'duas'} vias de igual teor, ` +
-          'juntamente com duas testemunhas, ou por meio eletrônico que permita comprovar autoria e integridade.',
-        style: 'paragrafo',
-      },
+      ...(texto.finais.some((p) => p.trim()) ? [{ text: texto.tituloFinais || 'DISPOSIÇÕES FINAIS', style: 'titulo2' } as Content] : []),
+      ...texto.finais.filter((p) => p.trim()).map((p) => paragrafoPdf(p.trim())),
       { text: `${cidadeAssinatura}, ${dataPorExtenso(op.dataAssinatura)}.`, margin: [0, 18, 0, 24], alignment: 'left' },
       {
         stack: [
@@ -413,7 +444,89 @@ export function nomeArquivoContrato(d: DadosContrato): string {
   return nomeArquivo(`Contrato - ${d.imovel.identificacao} - ${d.locacao.inquilino.nome}.pdf`)
 }
 
-/** Gera o PDF do contrato. */
-export async function gerarPdfContrato(d: DadosContrato, op: OpcoesContrato): Promise<Blob> {
-  return gerarPdf(montarContrato(d, op))
+/** Gera o PDF do contrato (com o texto padrão ou com um texto editado/modelo). */
+export async function gerarPdfContrato(d: DadosContrato, op: OpcoesContrato, texto?: TextoContrato): Promise<Blob> {
+  return gerarPdf(montarPdfContrato(texto ?? textoPadraoContrato(d, op), d, op))
+}
+
+/** Compatibilidade: monta o PDF com o texto padrão. */
+export function montarContrato(d: DadosContrato, op: OpcoesContrato): TDocumentDefinitions {
+  return montarPdfContrato(textoPadraoContrato(d, op), d, op)
+}
+
+// ----------------------------------------------------------- campos de modelo
+
+/** Campos que podem ser usados nos modelos, com o valor de cada locação. */
+export const CAMPOS_MODELO: { campo: string; descricao: string }[] = [
+  { campo: 'QUALIFICACAO_LOCADOR', descricao: 'Qualificação completa do proprietário' },
+  { campo: 'QUALIFICACAO_LOCATARIO', descricao: 'Qualificação completa do inquilino' },
+  { campo: 'LOCADOR_NOME', descricao: 'Nome do proprietário (maiúsculas)' },
+  { campo: 'LOCADOR_CPF_CNPJ', descricao: 'CPF/CNPJ do proprietário' },
+  { campo: 'LOCATARIO_NOME', descricao: 'Nome do inquilino (maiúsculas)' },
+  { campo: 'LOCATARIO_CPF', descricao: 'CPF do inquilino' },
+  { campo: 'IMOVEL_ENDERECO', descricao: 'Endereço completo do imóvel' },
+  { campo: 'VALOR_ALUGUEL', descricao: 'Valor do aluguel (R$ 1.500,00)' },
+  { campo: 'VALOR_EXTENSO', descricao: 'Valor por extenso' },
+  { campo: 'DIA_VENCIMENTO', descricao: 'Dia do vencimento' },
+  { campo: 'PRAZO_MESES', descricao: 'Prazo em meses, com extenso' },
+  { campo: 'DATA_INICIO', descricao: 'Início do contrato (dd/mm/aaaa)' },
+  { campo: 'DATA_FIM', descricao: 'Fim do contrato (dd/mm/aaaa)' },
+  { campo: 'CHAVE_PIX', descricao: 'Chave PIX do proprietário' },
+  { campo: 'FORO', descricao: 'Cidade do foro' },
+]
+
+/** Valores dos campos para uma locação. */
+export function valoresCampos(d: DadosContrato): Record<string, string> {
+  const { imovel, proprietario, locacao } = d
+  const inq = locacao.inquilino
+  const valor = Number(locacao.valor_aluguel)
+  const fim = fimDoContrato(locacao)
+  const cidadeImovel = [imovel.cidade, imovel.uf].filter(Boolean).join('/')
+  const v: Record<string, string> = {
+    QUALIFICACAO_LOCADOR: proprietario ? qualificacao(proprietario, proprietario.cpf_cnpj, { juridica: proprietario.tipo_pessoa === 'juridica' }) : '',
+    QUALIFICACAO_LOCATARIO: qualificacao(inq, inq.cpf, { locatario: true }),
+    LOCADOR_NOME: proprietario?.nome.toUpperCase() ?? '',
+    LOCADOR_CPF_CNPJ: proprietario?.cpf_cnpj ?? '',
+    LOCATARIO_NOME: inq.nome.toUpperCase(),
+    LOCATARIO_CPF: inq.cpf ?? '',
+    IMOVEL_ENDERECO: enderecoPorExtenso(imovel) || imovel.endereco,
+    VALOR_ALUGUEL: formatarMoeda(valor),
+    VALOR_EXTENSO: valorPorExtenso(valor),
+    DIA_VENCIMENTO: String(locacao.dia_vencimento),
+    PRAZO_MESES: locacao.prazo_meses ? numeroComExtenso(locacao.prazo_meses) : '',
+    DATA_INICIO: formatarData(locacao.data_inicio_contrato),
+    DATA_FIM: fim ? formatarData(fim) : '',
+    CHAVE_PIX: proprietario?.pix ?? '',
+    FORO: locacao.foro || cidadeImovel,
+  }
+  return v
+}
+
+const mapearTexto = (t: TextoContrato, f: (s: string) => string): TextoContrato => ({
+  titulo: f(t.titulo),
+  subtitulo: f(t.subtitulo),
+  tituloAbertura: f(t.tituloAbertura),
+  partes: t.partes.map(f),
+  clausulas: t.clausulas.map((c) => ({ titulo: f(c.titulo), paragrafos: c.paragrafos.map(f) })),
+  tituloFinais: f(t.tituloFinais),
+  finais: t.finais.map(f),
+})
+
+/** Preenche os campos {{...}} de um modelo com os dados da locação (campo vazio vira lacuna). */
+export function preencherModelo(modelo: TextoContrato, d: DadosContrato): TextoContrato {
+  const v = valoresCampos(d)
+  return mapearTexto(modelo, (s) => s.replace(/\{\{([A-Z_]+)\}\}/g, (todo, campo: string) => (campo in v ? v[campo] || L : todo)))
+}
+
+/**
+ * Transforma um texto preenchido em modelo: troca os dados desta locação pelos
+ * campos {{...}} (os mais longos primeiro), para reaproveitar em outras locações.
+ * O dia do vencimento não é trocado automaticamente (número curto demais).
+ */
+export function extrairModelo(texto: TextoContrato, d: DadosContrato): TextoContrato {
+  const v = valoresCampos(d)
+  const pares = Object.entries(v)
+    .filter(([campo, valor]) => campo !== 'DIA_VENCIMENTO' && valor && valor.length >= 5)
+    .sort((a, b) => b[1].length - a[1].length)
+  return mapearTexto(texto, (s) => pares.reduce((acc, [campo, valor]) => acc.split(valor).join(`{{${campo}}}`), s))
 }

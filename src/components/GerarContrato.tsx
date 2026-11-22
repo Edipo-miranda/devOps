@@ -4,7 +4,22 @@ import { Modal } from './Modal'
 import { Campo } from './CamposLocacao'
 import { CampoData } from './CampoData'
 import { IconeBaixar, IconeCompartilhar } from './Icones'
-import { gerarPdfContrato, nomeArquivoContrato, pendenciasContrato, type DadosContrato, type OpcoesContrato } from '../lib/contrato'
+import { EditorContrato } from './EditorContrato'
+import {
+  extrairModelo,
+  gerarPdfContrato,
+  nomeArquivoContrato,
+  pendenciasContrato,
+  preencherModelo,
+  textoPadraoContrato,
+  type DadosContrato,
+  type OpcoesContrato,
+  type TextoContrato,
+} from '../lib/contrato'
+import { excluirModelo, listarModelos, salvarModelo, salvarTextoContrato } from '../lib/api'
+import { mensagemDeErro } from '../lib/erros'
+import { entregarArquivo } from '../lib/pdf'
+import { useCarregar } from '../lib/useCarregar'
 import { mascararCpf } from '../lib/documentos'
 import { hojeBrasil } from '../lib/format'
 
@@ -22,6 +37,15 @@ export function GerarContrato({ dados, aoFechar }: { dados: DadosContrato; aoFec
   const [erro, setErro] = useState<string | null>(null)
   const [pronto, setPronto] = useState<string | null>(null)
 
+  // Qual texto usar: padrão, o editado desta locação, ou um modelo salvo.
+  const [textoLocacao, setTextoLocacao] = useState<TextoContrato | null>((dados.locacao.contrato_texto as TextoContrato | null) ?? null)
+  const [fonte, setFonte] = useState<string>(textoLocacao ? 'locacao' : 'padrao')
+  const [textoEditado, setTextoEditado] = useState<TextoContrato | null>(null)
+  const [editando, setEditando] = useState(false)
+  const [nomeModelo, setNomeModelo] = useState('')
+  const [salvandoTexto, setSalvandoTexto] = useState(false)
+  const { dados: modelos, recarregar: recarregarModelos } = useCarregar(listarModelos, [])
+
   const opcoes = (): OpcoesContrato => ({
     cidadeAssinatura: cidade.trim(),
     dataAssinatura: data,
@@ -30,33 +54,119 @@ export function GerarContrato({ dados, aoFechar }: { dados: DadosContrato; aoFec
   })
   const podeCompartilhar = typeof navigator !== 'undefined' && 'canShare' in navigator
 
+  /** Texto escolhido, já com os dados desta locação. */
+  function textoAtual(): TextoContrato {
+    if (textoEditado) return textoEditado
+    if (fonte === 'locacao' && textoLocacao) return preencherModelo(textoLocacao, dados)
+    const modelo = modelos?.find((m) => `modelo:${m.id}` === fonte)
+    if (modelo) return preencherModelo(modelo.conteudo as TextoContrato, dados)
+    return textoPadraoContrato(dados, opcoes())
+  }
+
+  function escolherFonte(f: string) {
+    setFonte(f)
+    setTextoEditado(null)
+  }
+
   async function gerar(acao: 'baixar' | 'compartilhar') {
     setErro(null)
     setPronto(null)
     setGerando(acao)
     try {
-      const blob = await gerarPdfContrato(dados, opcoes())
+      const blob = await gerarPdfContrato(dados, opcoes(), textoAtual())
       const nome = nomeArquivoContrato(dados)
-      const arquivo = new File([blob], nome, { type: 'application/pdf' })
-      if (acao === 'compartilhar' && navigator.canShare?.({ files: [arquivo] })) {
-        await navigator.share({ files: [arquivo], title: nome, text: 'Contrato de locação para assinatura' })
-        setPronto('Contrato compartilhado.')
-      } else {
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = nome
-        document.body.appendChild(a)
-        a.click()
-        a.remove()
-        setTimeout(() => URL.revokeObjectURL(url), 10_000)
-        setPronto(`PDF gerado: ${nome}`)
-      }
+      const ok = await entregarArquivo(blob, nome, acao, 'Contrato de locação para assinatura')
+      if (ok) setPronto(`PDF gerado: ${nome}. Depois de assinado, anexe-o em “Documentos” na página do imóvel.`)
     } catch (err) {
-      if ((err as Error).name !== 'AbortError') setErro('Não foi possível gerar o PDF. Tente novamente.')
+      setErro(`Não foi possível gerar o PDF. ${mensagemDeErro(err)}`)
     } finally {
       setGerando(null)
     }
+  }
+
+  async function salvarNaLocacao() {
+    setErro(null)
+    setSalvandoTexto(true)
+    try {
+      const modelo = extrairModelo(textoAtual(), dados)
+      await salvarTextoContrato(dados.locacao.id, modelo)
+      setTextoLocacao(modelo)
+      setFonte('locacao')
+      setPronto('Texto salvo nesta locação. Ele será usado sempre que gerar o contrato deste inquilino.')
+    } catch (err) {
+      setErro(mensagemDeErro(err))
+    } finally {
+      setSalvandoTexto(false)
+    }
+  }
+
+  async function salvarComoModelo() {
+    setErro(null)
+    if (nomeModelo.trim().length < 2) return setErro('Dê um nome ao modelo (ex.: "Comercial com fiador").')
+    setSalvandoTexto(true)
+    try {
+      await salvarModelo(null, nomeModelo.trim(), extrairModelo(textoAtual(), dados))
+      setPronto(`Modelo "${nomeModelo.trim()}" salvo. Ele aparece em "Texto do contrato" em qualquer locação.`)
+      setNomeModelo('')
+      recarregarModelos()
+    } catch (err) {
+      const e = err as { code?: string }
+      setErro(e.code === '23505' ? 'Já existe um modelo com esse nome.' : mensagemDeErro(err))
+    } finally {
+      setSalvandoTexto(false)
+    }
+  }
+
+  async function voltarAoPadraoNaLocacao() {
+    if (!window.confirm('Apagar o texto editado desta locação e voltar ao contrato padrão?')) return
+    try {
+      await salvarTextoContrato(dados.locacao.id, null)
+      setTextoLocacao(null)
+      escolherFonte('padrao')
+      setPronto('Esta locação voltou a usar o contrato padrão.')
+    } catch (err) {
+      setErro(mensagemDeErro(err))
+    }
+  }
+
+  async function apagarModelo() {
+    const m = modelos?.find((x) => `modelo:${x.id}` === fonte)
+    if (!m || !window.confirm(`Excluir o modelo "${m.nome}"? Contratos já gerados não são afetados.`)) return
+    try {
+      await excluirModelo(m.id)
+      escolherFonte(textoLocacao ? 'locacao' : 'padrao')
+      recarregarModelos()
+    } catch (err) {
+      setErro(mensagemDeErro(err))
+    }
+  }
+
+  if (editando) {
+    const texto = textoEditado ?? textoAtual()
+    return (
+      <Modal titulo="Editar texto do contrato" aoFechar={aoFechar} largo>
+        <EditorContrato texto={texto} aoMudar={setTextoEditado} />
+        {erro && <p className="alerta alerta--erro" role="alert">{erro}</p>}
+        {pronto && <p className="alerta alerta--ok" role="status">{pronto}</p>}
+        <div className="salvar-modelo">
+          <input value={nomeModelo} onChange={(e) => setNomeModelo(e.target.value)} placeholder="Nome do modelo (ex.: Comercial com fiador)" maxLength={100} />
+          <button type="button" className="botao" onClick={salvarComoModelo} disabled={salvandoTexto}>Salvar como modelo</button>
+        </div>
+        <div className="acoes-form acoes-form--separadas">
+          <button type="button" className="botao botao--discreto" onClick={() => { setTextoEditado(textoPadraoContrato(dados, opcoes())); setPronto(null) }}>
+            Restaurar texto padrão
+          </button>
+          <div className="grupo-botoes">
+            <button type="button" className="botao" onClick={salvarNaLocacao} disabled={salvandoTexto}>
+              {salvandoTexto ? 'Salvando…' : 'Salvar nesta locação'}
+            </button>
+            <button type="button" className="botao botao--primario" onClick={() => { setTextoEditado(texto); setEditando(false); setPronto(null) }}>
+              Usar este texto →
+            </button>
+          </div>
+        </div>
+      </Modal>
+    )
   }
 
   return (
@@ -79,6 +189,22 @@ export function GerarContrato({ dados, aoFechar }: { dados: DadosContrato; aoFec
           Complete em <em>Editar inquilino</em>, <em>Editar imóvel</em> ou em <Link to="/proprietarios" onClick={aoFechar}>Proprietários</Link>.
         </div>
       )}
+
+      <div className="escolha-texto">
+        <Campo rotulo="Texto do contrato">
+          <select value={textoEditado ? 'editado' : fonte} onChange={(e) => escolherFonte(e.target.value)}>
+            {textoEditado && <option value="editado">Texto editado agora (não salvo)</option>}
+            <option value="padrao">Contrato padrão (modelo revisado)</option>
+            {textoLocacao && <option value="locacao">Texto salvo desta locação</option>}
+            {modelos?.map((m) => <option key={m.id} value={`modelo:${m.id}`}>Modelo: {m.nome}</option>)}
+          </select>
+        </Campo>
+        <div className="grupo-botoes">
+          <button type="button" className="botao" onClick={() => setEditando(true)}>Editar texto / cláusulas</button>
+          {fonte === 'locacao' && !textoEditado && <button type="button" className="botao botao--discreto" onClick={voltarAoPadraoNaLocacao}>Voltar ao padrão</button>}
+          {fonte.startsWith('modelo:') && !textoEditado && <button type="button" className="botao botao--discreto botao--texto-perigo" onClick={apagarModelo}>Excluir modelo</button>}
+        </div>
+      </div>
 
       <div className="grade-2">
         <Campo rotulo="Cidade da assinatura">

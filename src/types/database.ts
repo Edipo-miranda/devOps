@@ -112,6 +112,7 @@ export interface ControleCaucao {
 }
 
 export interface Locacao extends CondicoesContrato, ControleCaucao {
+  contrato_texto: unknown | null // texto do contrato editado (modelo com campos {{...}})
   id: string
   owner_id: string
   imovel_id: string
@@ -243,4 +244,26 @@ export interface HistoricoMes {
   previsto: number
   recebido: number
   atrasado: number
+}
+
+export type TipoDocumento = 'contrato_assinado' | 'vistoria' | 'documento_pessoal' | 'comprovante' | 'aditivo' | 'outro'
+
+export interface Documento {
+  id: string
+  imovel_id: string
+  locacao_id: string | null
+  tipo: TipoDocumento
+  nome: string
+  caminho: string
+  tamanho: number | null
+  mime: string | null
+  observacao: string | null
+  created_at: string
+}
+
+export interface ModeloContrato {
+  id: string
+  nome: string
+  conteudo: unknown
+  updated_at: string
 }

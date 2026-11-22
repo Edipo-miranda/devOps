@@ -23,13 +23,15 @@ Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e i
 │   ├── migrations/0005_contrato_revisado_exclusao.sql ← índice de reajuste, IPTU, gênero, exclusão
 │   ├── migrations/0006_venda_exclusao_imovel.sql ← imóvel vendido e exclusão de imóvel
 │   ├── migrations/0007_financeiro_documentos.sql ← despesas, multa/juros, matrícula/IPTU, caução
+│   ├── migrations/0008_documentos_modelos.sql ← documentos anexados e modelos de contrato
 │   ├── tests/0001_verificar_banco.sql       ← testa o banco e apaga tudo que criou
 │   ├── tests/0002_verificar_funcoes_cadastro.sql
 │   ├── tests/0003_verificar_contratos_avisos.sql
 │   ├── tests/0004_verificar_proprietarios_contrato.sql
 │   ├── tests/0005_verificar_contrato_exclusao.sql
 │   ├── tests/0006_verificar_venda_exclusao_imovel.sql
-│   └── tests/0007_verificar_financeiro.sql
+│   ├── tests/0007_verificar_financeiro.sql
+│   └── tests/0008_verificar_documentos_modelos.sql
 ├── src/
 │   ├── lib/supabase.ts       ← conexão com o Supabase (só chave pública)
 │   ├── lib/erros.ts          ← traduz erros para mensagens em português
@@ -305,6 +307,17 @@ Assinatura: no papel (imprimir e rubricar cada página) ou, de graça pela inter
      exportação dos cadastros.
    - **Imóvel**: matrícula, cartório, inscrição e valor do IPTU, condomínio, área, cômodos, contas de luz/água.
    - **Caução**: datas de recebimento/devolução e valor devolvido.
+
+## Documentos e modelos de contrato (script 0008)
+
+1. Supabase → **SQL Editor**: rode `supabase/migrations/0008_documentos_modelos.sql` → *Success*.
+   (Cria a pasta privada **documentos** no Storage, com limite de 20 MB por arquivo.)
+2. Rode `supabase/tests/0008_verificar_documentos_modelos.sql` → **6 linhas OK**.
+3. **Documentos**: na página do imóvel → **+ Anexar documento** (contrato assinado, vistoria, RG/CPF, comprovantes).
+   Os arquivos são privados: só o usuário dono consegue abrir.
+4. **Editar o contrato**: Gerar contrato → **Editar texto / cláusulas** (alterar, incluir, remover e reordenar
+   cláusulas). **Salvar nesta locação** guarda a versão para aquele inquilino; **Salvar como modelo** cria um
+   contrato próprio reaproveitável (os dados viram campos como `{{LOCATARIO_NOME}}`).
 
 ## Dar acesso a outra pessoa
 

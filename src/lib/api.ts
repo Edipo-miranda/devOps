@@ -9,6 +9,9 @@ import type {
   Configuracoes,
   ControleCaucao,
   Despesa,
+  Documento,
+  ModeloContrato,
+  TipoDocumento,
   Endereco,
   HistoricoMes,
   Imovel,
@@ -469,6 +472,8 @@ export async function movimentacaoInquilino(id: string): Promise<MovimentacaoInq
 
 /** Apaga o inquilino e toda a movimentação dele (locações, lançamentos, pagamentos e reajustes). */
 export async function excluirInquilino(id: string): Promise<void> {
+  const { data: locs } = await supabase.from('locacoes').select('id').eq('inquilino_id', id)
+  await apagarArquivosDocumentos({ locacaoIds: (locs ?? []).map((l) => l.id as string) })
   const { error } = await supabase.rpc('excluir_inquilino', { p_inquilino_id: id })
   if (error) throw error
   invalidarMesAtual()
@@ -527,6 +532,7 @@ export async function movimentacaoImovel(id: string) {
 
 /** Apaga o imóvel e toda a movimentação dele. Os inquilinos continuam cadastrados. */
 export async function excluirImovel(id: string): Promise<void> {
+  await apagarArquivosDocumentos({ imovelId: id })
   const { error } = await supabase.rpc('excluir_imovel', { p_imovel_id: id })
   if (error) throw error
   invalidarMesAtual()
@@ -585,4 +591,86 @@ export async function buscarRecebimentos(ids: string[]): Promise<RecebimentoDeta
   const { data, error } = await supabase.from('vw_recebimentos').select('*').in('id', ids)
   if (error) throw error
   return (data ?? []) as RecebimentoDetalhado[]
+}
+
+// -------------------------------------------------- Contrato editado e modelos
+
+export async function salvarTextoContrato(locacaoId: string, conteudo: unknown | null): Promise<void> {
+  const { error } = await supabase.from('locacoes').update({ contrato_texto: conteudo }).eq('id', locacaoId)
+  if (error) throw error
+  notificarAlteracao()
+}
+
+export async function listarModelos(): Promise<ModeloContrato[]> {
+  const { data, error } = await supabase.from('modelos_contrato').select('id, nome, conteudo, updated_at').order('nome')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function salvarModelo(id: string | null, nome: string, conteudo: unknown): Promise<void> {
+  const { error } = id
+    ? await supabase.from('modelos_contrato').update({ nome, conteudo }).eq('id', id)
+    : await supabase.from('modelos_contrato').insert({ nome, conteudo })
+  if (error) throw error
+}
+
+export async function excluirModelo(id: string): Promise<void> {
+  const { error } = await supabase.from('modelos_contrato').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ------------------------------------------------------------- Documentos
+
+const PASTA = 'documentos'
+
+export async function listarDocumentos(imovelId: string): Promise<Documento[]> {
+  const { data, error } = await supabase.from('documentos').select('*').eq('imovel_id', imovelId).order('created_at', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+/** Envia o arquivo para a pasta privada do usuário e registra o documento. */
+export async function enviarDocumento(
+  arquivo: File,
+  dados: { imovel_id: string; locacao_id: string | null; tipo: TipoDocumento; nome: string; observacao: string | null },
+): Promise<void> {
+  const { data: sessao } = await supabase.auth.getSession()
+  const uid = sessao.session?.user.id
+  if (!uid) throw new Error('Sessão expirada. Entre novamente.')
+  const seguro = arquivo.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-80)
+  const caminho = `${uid}/${dados.imovel_id}/${crypto.randomUUID()}-${seguro}`
+  const envio = await supabase.storage.from(PASTA).upload(caminho, arquivo, { contentType: arquivo.type || undefined, upsert: false })
+  if (envio.error) throw envio.error
+  const { error } = await supabase.from('documentos').insert({ ...dados, caminho, tamanho: arquivo.size, mime: arquivo.type || null })
+  if (error) {
+    await supabase.storage.from(PASTA).remove([caminho]) // não deixa arquivo órfão
+    throw error
+  }
+}
+
+/** Link temporário (5 minutos) para abrir/baixar um documento privado. */
+export async function linkDocumento(caminho: string, baixar?: string): Promise<string> {
+  const { data, error } = await supabase.storage.from(PASTA).createSignedUrl(caminho, 300, baixar ? { download: baixar } : undefined)
+  if (error) throw error
+  return data.signedUrl
+}
+
+export async function excluirDocumento(doc: Pick<Documento, 'id' | 'caminho'>): Promise<void> {
+  const arq = await supabase.storage.from(PASTA).remove([doc.caminho])
+  if (arq.error) throw arq.error
+  const { error } = await supabase.from('documentos').delete().eq('id', doc.id)
+  if (error) throw error
+}
+
+/** Apaga os arquivos do Storage antes de excluir imóvel/inquilino (o banco apaga os registros). */
+export async function apagarArquivosDocumentos(filtro: { imovelId?: string; locacaoIds?: string[] }): Promise<void> {
+  let q = supabase.from('documentos').select('caminho')
+  if (filtro.imovelId) q = q.eq('imovel_id', filtro.imovelId)
+  if (filtro.locacaoIds) {
+    if (filtro.locacaoIds.length === 0) return
+    q = q.in('locacao_id', filtro.locacaoIds)
+  }
+  const { data } = await q
+  const caminhos = (data ?? []).map((d) => d.caminho as string)
+  if (caminhos.length) await supabase.storage.from(PASTA).remove(caminhos)
 }

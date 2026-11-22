@@ -102,6 +102,18 @@ export function VerificacaoPage() {
         : { nome: 'Despesas, recibos e relatórios (script 0007)', estado: 'ok' },
     )
 
+    // Documentos e modelos (0008). Só leitura.
+    const [{ error: erroDocs }, { error: erroPasta }] = await Promise.all([
+      supabase.from('modelos_contrato').select('id', { count: 'exact', head: true }),
+      supabase.storage.from('documentos').list('', { limit: 1 }),
+    ])
+    const erro0008 = erroDocs ?? erroPasta
+    resultados.push(
+      erro0008
+        ? { nome: 'Documentos e modelos de contrato (script 0008)', estado: 'erro', detalhe: mensagemDeErro(erro0008) }
+        : { nome: 'Documentos e modelos de contrato (script 0008)', estado: 'ok' },
+    )
+
     return resultados
   }, [])
 

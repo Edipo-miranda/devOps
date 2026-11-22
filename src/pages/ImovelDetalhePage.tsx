@@ -6,6 +6,7 @@ import { ExcluirImovel, FormVendaImovel } from '../components/FormsImovelVenda'
 import { IconeDocumento } from '../components/Icones'
 import { GARANTIAS, INDICE_COMPLETO, formatarEndereco } from '../lib/documentos'
 import { DespesasImovel } from '../components/Despesas'
+import { DocumentosImovel } from '../components/Documentos'
 import { FormImovel } from '../components/FormImovel'
 import {
   FormEditarInquilino,
@@ -251,6 +252,13 @@ export function ImovelDetalhePage() {
           </dl>
         </div>
       )}
+
+      <DocumentosImovel
+        imovelId={imovel.id}
+        locacoes={locacoes}
+        aoAlterar={(texto) => setAviso({ tipo: 'ok', texto })}
+        aoErro={(texto) => setAviso({ tipo: 'erro', texto })}
+      />
 
       <DespesasImovel
         imovelId={imovel.id}

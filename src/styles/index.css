@@ -491,6 +491,39 @@ a.botao { text-decoration: none; display: inline-block; }
 .resultado-mes small { font-size: 0.72rem; }
 .resultado-mes__link { align-self: center; font-weight: 700; font-size: 0.85rem; text-decoration: none; white-space: nowrap; }
 
+/* Editor de contrato e modelos */
+.escolha-texto { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; margin-bottom: 6px; }
+.escolha-texto .grupo-botoes { margin-bottom: 16px; }
+.editor-contrato textarea { font-size: 0.875rem; line-height: 1.5; }
+.editor-clausula { border: 1px solid var(--borda); border-radius: 12px; padding: 10px 12px 12px; margin-bottom: 12px; background: var(--superficie-2); }
+.editor-clausula__topo { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.editor-clausula__numero { font-weight: 800; font-size: 0.8rem; color: var(--primaria-forte); white-space: nowrap; }
+.editor-clausula__topo input { flex: 1; min-width: 180px; font: inherit; font-weight: 700; padding: 7px 10px; border: 1.5px solid var(--borda); border-radius: 8px; text-transform: uppercase; }
+.editor-clausula textarea { width: 100%; font: inherit; font-size: 0.875rem; padding: 9px 11px; border: 1.5px solid var(--borda); border-radius: 10px; resize: vertical; }
+.editor-clausula textarea:focus, .editor-clausula__topo input:focus, .salvar-modelo input:focus {
+  outline: none; border-color: var(--primaria); box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.15);
+}
+.campos-modelo { background: var(--superficie-2); border: 1px dashed var(--borda); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; }
+.campos-modelo ul { columns: 2; margin: 6px 0 0; padding-left: 16px; font-size: 0.8rem; }
+.campos-modelo code { background: #e2f3ef; border-radius: 4px; padding: 0 4px; font-size: 0.78rem; }
+.botao-link { border: none; background: none; padding: 0; font: inherit; font-weight: 700; color: var(--primaria-forte); cursor: pointer; text-decoration: underline; }
+.salvar-modelo { display: flex; gap: 8px; margin: 6px 0 4px; }
+.salvar-modelo input { flex: 1; font: inherit; padding: 8px 12px; border: 1.5px solid var(--borda); border-radius: 10px; }
+
+/* Documentos */
+.lista-documentos { list-style: none; margin: 0; padding: 0; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); box-shadow: var(--sombra); }
+.documento { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid #eef1f5; }
+.documento:last-child { border-bottom: none; }
+.documento__icone { width: 38px; height: 38px; border-radius: 10px; background: var(--info-fundo); color: var(--info); display: grid; place-items: center; }
+.documento__nome { font-weight: 600; word-break: break-word; }
+
+.escolher-arquivo {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 22px; margin-bottom: 16px; text-align: center;
+  border: 2px dashed #b9d7d1; border-radius: 14px; background: #f3faf8; cursor: pointer;
+}
+.escolher-arquivo:hover { border-color: var(--primaria); }
+.escolher-arquivo--ok { border-style: solid; border-color: var(--primaria); background: var(--ok-fundo); }
+
 /* WhatsApp */
 .botao--whatsapp {
   display: inline-flex !important; align-items: center; gap: 6px;
@@ -581,6 +614,11 @@ a.botao { text-decoration: none; display: inline-block; }
   .grade-2, .grade-3, .resumo-lancamento { grid-template-columns: 1fr; }
   .grade-4 { grid-template-columns: 1fr 1fr; }
   .grade-despesa { grid-template-columns: 1fr; }
+  .escolha-texto { grid-template-columns: 1fr; }
+  .campos-modelo ul { columns: 1; }
+  .salvar-modelo { flex-direction: column; }
+  .documento { grid-template-columns: auto 1fr; }
+  .documento .grupo-botoes { grid-column: 1 / -1; }
   .resultado-mes { grid-template-columns: 1fr 1fr; }
   .resultado-mes__link { grid-column: 1 / -1; }
   .resultado-ano, .resultado-ano--4 { grid-template-columns: 1fr 1fr; }
