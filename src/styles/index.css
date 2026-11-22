@@ -40,6 +40,11 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100vh; background: var(--fundo); }
+/* Textos compridos sem espaço (e-mail, chave PIX, link) quebram de linha em vez de estourar a tela do celular. */
+body { overflow-wrap: break-word; }
+.cartao, .login__cartao, .alerta, .dados-grade dd, .resumo-lancamento dd, .modal { overflow-wrap: anywhere; }
+.dados-grade > * { min-width: 0; }
+.tabela, .botao { overflow-wrap: normal; }
 h1 { font-size: 1.6rem; margin: 0 0 4px; font-weight: 800; letter-spacing: -0.025em; }
 h2 { font-size: 1.05rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
 h3 { font-size: 0.95rem; font-weight: 700; margin: 0; }
