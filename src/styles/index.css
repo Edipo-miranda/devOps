@@ -454,6 +454,15 @@ a.botao { text-decoration: none; display: inline-block; }
 .botao--texto-perigo:hover { background: var(--erro-fundo) !important; }
 .alerta--exclusao p { margin: 6px 0 0; }
 .acoes-form--separadas { justify-content: space-between; align-items: center; flex-wrap: wrap; }
+/* Senha com olho */
+.campo-senha { position: relative; display: flex; }
+.campo-senha input { padding-right: 46px !important; }
+.campo-senha__olho {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 38px; height: 38px;
+  border: none; background: transparent; color: var(--texto-suave); cursor: pointer; border-radius: 8px;
+  display: grid; place-items: center;
+}
+.campo-senha__olho:hover { background: var(--fundo); color: var(--primaria-forte); }
 .campo-com-botao { display: flex; gap: 8px; align-items: center; }
 .campo-com-botao .campo-data { flex: 1; }
 .venda-info { margin: 10px 0 0; display: inline-block; }

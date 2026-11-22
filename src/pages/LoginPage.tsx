@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { CampoSenha } from '../components/CampoSenha'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { supabase } from '../lib/supabase'
@@ -62,7 +63,7 @@ export function LoginPage() {
         </label>
         <label className="campo">
           <span>Senha</span>
-          <input type="password" autoComplete="current-password" value={senha} onChange={(e) => setSenha(e.target.value)} required />
+          <CampoSenha valor={senha} aoMudar={setSenha} autoComplete="current-password" />
         </label>
 
         {erro && <p className="alerta alerta--erro" role="alert">{erro}</p>}

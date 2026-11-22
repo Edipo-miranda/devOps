@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { CampoSenha } from './CampoSenha'
 import { Campo } from './CamposLocacao'
 import { supabase } from '../lib/supabase'
 import { mensagemDeErro } from '../lib/erros'
@@ -36,10 +37,10 @@ export function FormNovaSenha({ rotuloBotao, aoSalvar }: { rotuloBotao: string; 
   return (
     <form onSubmit={salvar} noValidate>
       <Campo rotulo="Nova senha" dica="mínimo 8, com letras e números" erro={erros.senha}>
-        <input type="password" autoComplete="new-password" value={senha} onChange={(e) => setSenha(e.target.value)} />
+        <CampoSenha valor={senha} aoMudar={setSenha} autoComplete="new-password" />
       </Campo>
       <Campo rotulo="Repita a nova senha" erro={erros.confirmacao}>
-        <input type="password" autoComplete="new-password" value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} />
+        <CampoSenha valor={confirmacao} aoMudar={setConfirmacao} autoComplete="new-password" />
       </Campo>
       {erroGeral && <p className="alerta alerta--erro" role="alert">{erroGeral}</p>}
       <button type="submit" className="botao botao--primario botao--largo" disabled={salvando}>
