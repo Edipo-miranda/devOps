@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { IconeWhatsApp } from './Icones'
 import { Link } from 'react-router-dom'
 import { FormPagamento } from './FormsRecebimento'
 import { buscarRecebimento, buscarRecebimentos, lerConfiguracoes } from '../lib/api'
@@ -89,7 +90,7 @@ export function ListaAvisos({ avisos, aoAlterar, aoErro }: Props) {
                 return (
                   <a className="botao botao--pequeno botao--whatsapp" target="_blank" rel="noreferrer"
                     href={linkWhatsApp(r.inquilino_telefone, mensagemCobranca(r, extra.cobrar))}>
-                    {a.tipo === 'parcela_atrasada' ? 'Cobrar' : 'Lembrar'}
+                    <IconeWhatsApp /> {a.tipo === 'parcela_atrasada' ? 'Cobrar' : 'Lembrar'}
                   </a>
                 )
               })()}

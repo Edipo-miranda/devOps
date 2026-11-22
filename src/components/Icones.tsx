@@ -78,3 +78,10 @@ export const IconeOlhoFechado = (p: P) => (
 export const IconeGrafico = (p: P) => (
   <Icone {...p}><path d="M3 3v18h18" /><path d="M7 15v3M11 11v7M15 13v5M19 8v10" /></Icone>
 )
+/** Balão do WhatsApp (preenchido, com o telefone vazado). */
+export const IconeWhatsApp = ({ tamanho = 16 }: P) => (
+  <svg viewBox="0 0 24 24" width={tamanho} height={tamanho} aria-hidden="true">
+    <path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.05-1.32A10 10 0 1 0 12 2Z" />
+    <path fill="#fff" d="M8.6 7.1c.25-.55.52-.56.76-.57h.65c.2 0 .45.02.65.5l.86 2.04c.09.2.1.42-.02.62l-.5.72c-.12.17-.22.3-.04.58.55.95 1.75 2.18 2.83 2.7.3.15.45.12.62-.07l.7-.82c.17-.2.38-.2.6-.12l1.92.92c.27.13.42.2.46.33.06.42-.12 1.36-.75 1.86-.66.52-1.6.73-2.72.33-2.5-.88-4.55-2.85-5.55-5.07-.62-1.38-.47-2.47.03-3.15Z" />
+  </svg>
+)

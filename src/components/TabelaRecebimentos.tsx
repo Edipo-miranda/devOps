@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { IconeWhatsApp } from './Icones'
 import { SeloSituacao } from './SeloSituacao'
 import { FormEditarLancamento, FormPagamento } from './FormsRecebimento'
 import { desfazerPagamento, lerConfiguracoes } from '../lib/api'
@@ -108,7 +109,7 @@ export function TabelaRecebimentos({ linhas, aoAlterar, aoErro, ocultarImovel }:
                       <button className="botao botao--pequeno botao--primario" onClick={() => setPagando(r)}>Registrar pagamento</button>
                       <a className="botao botao--pequeno botao--whatsapp" href={linkWhatsApp(r.inquilino_telefone, mensagemCobranca(r, cobrarEncargos))}
                         target="_blank" rel="noreferrer" title={r.situacao === 'atrasado' ? 'Cobrar pelo WhatsApp' : 'Lembrete pelo WhatsApp'}>
-                        {r.situacao === 'atrasado' ? 'Cobrar' : 'Lembrar'}
+                        <IconeWhatsApp /> {r.situacao === 'atrasado' ? 'Cobrar' : 'Lembrar'}
                       </a>
                       <button className="botao botao--pequeno botao--discreto" onClick={() => setEditando(r)}>Editar</button>
                     </>
