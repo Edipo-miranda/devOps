@@ -39,6 +39,9 @@ export interface Imovel extends Endereco {
   tipo: string | null
   descricao: string | null
   proprietario_id: string | null
+  vendido_em: string | null // preenchido quando o imóvel foi vendido
+  valor_venda: number | null
+  comprador: string | null
   ativo: boolean
   created_at: string
   updated_at: string

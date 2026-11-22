@@ -57,7 +57,7 @@ export function ImoveisPage() {
         />
         <select value={filtro} onChange={(e) => setFiltro(e.target.value as Filtro)} aria-label="Mostrar">
           <option value="ativos">Imóveis ativos</option>
-          <option value="inativos">Imóveis desativados</option>
+          <option value="inativos">Desativados e vendidos</option>
           <option value="todos">Todos</option>
         </select>
       </div>
@@ -99,7 +99,9 @@ export function ImoveisPage() {
                     <td data-rotulo="Aluguel" className="num">{l ? formatarMoeda(l.valor_aluguel) : '—'}</td>
                     <td data-rotulo="Vencimento">{l ? `Dia ${l.dia_vencimento}` : '—'}</td>
                     <td data-rotulo="Situação">
-                      {!i.ativo ? (
+                      {i.vendido_em ? (
+                        <span className="selo selo--info">Vendido</span>
+                      ) : !i.ativo ? (
                         <span className="selo selo--neutro">Desativado</span>
                       ) : l ? (
                         <span className="selo selo--pago">Alugado</span>

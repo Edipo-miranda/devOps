@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Aviso, type AvisoDados } from '../components/Aviso'
 import { GerarContrato } from '../components/GerarContrato'
+import { ExcluirImovel, FormVendaImovel } from '../components/FormsImovelVenda'
 import { IconeDocumento } from '../components/Icones'
 import { GARANTIAS, formatarEndereco } from '../lib/documentos'
 import { FormImovel } from '../components/FormImovel'
@@ -38,6 +39,8 @@ type Janela =
   | { tipo: 'reajuste'; locacao: LocacaoComInquilino }
   | { tipo: 'renovar'; locacao: LocacaoComInquilino }
   | { tipo: 'contrato'; locacao: LocacaoComInquilino }
+  | { tipo: 'venda' }
+  | { tipo: 'excluir' }
   | null
 
 /** "em 15 dias", "hoje", "há 3 dias" — distância de uma data até hoje. */
@@ -51,6 +54,7 @@ function prazoRelativo(data: string): string {
 export function ImovelDetalhePage() {
   const { id = '' } = useParams()
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const [janela, setJanela] = useState<Janela>(null)
   const [aviso, setAviso] = useState<AvisoDados | null>(null)
   const fecharAviso = useCallback(() => setAviso(null), [])
@@ -84,9 +88,11 @@ export function ImovelDetalhePage() {
     if (!dados) return
     const ativo = !dados.imovel.ativo
     if (!ativo && !window.confirm('Desativar este imóvel? Ele sai da lista principal, mas todo o histórico é mantido.')) return
+    if (ativo && dados.imovel.vendido_em &&
+      !window.confirm('Desfazer a venda? O imóvel volta a ficar ativo e os dados da venda são apagados. A locação encerrada não é reaberta.')) return
     try {
       await definirImovelAtivo(dados.imovel.id, ativo)
-      concluido(ativo ? 'Imóvel reativado.' : 'Imóvel desativado.')
+      concluido(ativo ? (dados.imovel.vendido_em ? 'Venda desfeita. Imóvel ativo novamente.' : 'Imóvel reativado.') : 'Imóvel desativado.')
     } catch (err) {
       setAviso({ tipo: 'erro', texto: mensagemDeErro(err) })
     }
@@ -118,7 +124,7 @@ export function ImovelDetalhePage() {
         <div>
           <h1>
             {imovel.identificacao}{' '}
-            {!imovel.ativo && <span className="selo selo--neutro">Desativado</span>}
+            {imovel.vendido_em ? <span className="selo selo--info">Vendido</span> : !imovel.ativo && <span className="selo selo--neutro">Desativado</span>}
           </h1>
           <p className="texto-suave">{formatarEndereco(imovel) || imovel.endereco}</p>
           <p className="texto-suave texto-pequeno">
@@ -126,10 +132,21 @@ export function ImovelDetalhePage() {
             {proprietario ? <> · Proprietário: <Link to="/proprietarios">{proprietario.nome}</Link></> : <> · <em>sem proprietário vinculado</em></>}
           </p>
           {imovel.observacoes && <p className="texto-suave texto-pequeno">{imovel.observacoes}</p>}
+          {imovel.vendido_em && (
+            <p className="alerta alerta--info texto-pequeno venda-info">
+              Vendido em <strong>{formatarData(imovel.vendido_em)}</strong>
+              {imovel.valor_venda ? <> por <strong>{formatarMoeda(imovel.valor_venda)}</strong></> : null}
+              {imovel.comprador ? <> para <strong>{imovel.comprador}</strong></> : null}. O histórico abaixo continua guardado.
+            </p>
+          )}
         </div>
         <div className="grupo-botoes">
           <button className="botao" onClick={() => setJanela({ tipo: 'imovel' })}>Editar imóvel</button>
-          <button className="botao botao--discreto" onClick={alternarAtivo}>{imovel.ativo ? 'Desativar' : 'Reativar'}</button>
+          {imovel.ativo && <button className="botao" onClick={() => setJanela({ tipo: 'venda' })}>Marcar como vendido</button>}
+          <button className="botao botao--discreto" onClick={alternarAtivo}>
+            {imovel.ativo ? 'Desativar' : imovel.vendido_em ? 'Desfazer venda' : 'Reativar'}
+          </button>
+          <button className="botao botao--discreto botao--texto-perigo" onClick={() => setJanela({ tipo: 'excluir' })}>Excluir</button>
         </div>
       </div>
 
@@ -301,6 +318,12 @@ export function ImovelDetalhePage() {
       )}
       {janelaAberta?.tipo === 'renovar' && (
         <FormRenovarContrato locacao={janelaAberta.locacao} aoFechar={() => fecharJanela()} aoSalvar={concluido} />
+      )}
+      {janelaAberta?.tipo === 'venda' && (
+        <FormVendaImovel imovel={imovel} locacaoAtiva={ativa} aoFechar={() => fecharJanela()} aoSalvar={concluido} />
+      )}
+      {janelaAberta?.tipo === 'excluir' && (
+        <ExcluirImovel imovel={imovel} aoFechar={() => fecharJanela()} aoExcluir={() => navigate('/imoveis', { replace: true })} />
       )}
       {janelaAberta?.tipo === 'contrato' && (
         <GerarContrato dados={{ imovel, proprietario, locacao: janelaAberta.locacao }} aoFechar={() => fecharJanela()} />

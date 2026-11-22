@@ -117,7 +117,9 @@ export async function atualizarImovel(id: string, dados: DadosImovel): Promise<v
 }
 
 export async function definirImovelAtivo(id: string, ativo: boolean): Promise<void> {
-  const { error } = await supabase.from('imoveis').update({ ativo }).eq('id', id)
+  // Reativar também desfaz uma venda registrada.
+  const dados = ativo ? { ativo, vendido_em: null, valor_venda: null, comprador: null } : { ativo }
+  const { error } = await supabase.from('imoveis').update(dados).eq('id', id)
   if (error) throw error
   notificarAlteracao()
 }
@@ -475,4 +477,45 @@ export async function listarInquilinosComLocacoes() {
     .order('nome')
   if (error) throw error
   return (data ?? []) as (Inquilino & { locacoes: { id: string; situacao: string; imovel: { id: string; identificacao: string } | null }[] })[]
+}
+
+// ---------------------------------------------------------- Venda/exclusão de imóvel
+
+/** Encerra a locação ativa na data da venda e desativa o imóvel, mantendo o histórico. */
+export async function marcarImovelVendido(id: string, dados: { data: string; valor: number | null; comprador: string | null }): Promise<number> {
+  const { data, error } = await supabase.rpc('marcar_imovel_vendido', {
+    p_imovel_id: id,
+    p_data: dados.data,
+    p_valor: dados.valor,
+    p_comprador: dados.comprador,
+  })
+  if (error) throw error
+  invalidarMesAtual()
+  notificarAlteracao()
+  return data as number
+}
+
+/** Conta o que será apagado junto com o imóvel (para a mensagem de confirmação). */
+export async function movimentacaoImovel(id: string) {
+  const [loc, rec] = await Promise.all([
+    supabase.from('locacoes').select('id, situacao, inquilino:inquilinos(nome)').eq('imovel_id', id),
+    supabase.from('vw_recebimentos').select('situacao').eq('imovel_id', id),
+  ])
+  if (loc.error) throw loc.error
+  if (rec.error) throw rec.error
+  const locacoes = (loc.data ?? []) as unknown as { situacao: string; inquilino: { nome: string } | null }[]
+  return {
+    locacoes: locacoes.length,
+    inquilinos: [...new Set(locacoes.map((l) => l.inquilino?.nome).filter((x): x is string => Boolean(x)))],
+    lancamentos: rec.data?.length ?? 0,
+    pagos: rec.data?.filter((r) => r.situacao === 'pago').length ?? 0,
+  }
+}
+
+/** Apaga o imóvel e toda a movimentação dele. Os inquilinos continuam cadastrados. */
+export async function excluirImovel(id: string): Promise<void> {
+  const { error } = await supabase.rpc('excluir_imovel', { p_imovel_id: id })
+  if (error) throw error
+  invalidarMesAtual()
+  notificarAlteracao()
 }
