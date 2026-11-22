@@ -1,6 +1,9 @@
 import { useCallback, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Aviso, type AvisoDados } from '../components/Aviso'
+import { GerarContrato } from '../components/GerarContrato'
+import { IconeDocumento } from '../components/Icones'
+import { GARANTIAS, formatarEndereco } from '../lib/documentos'
 import { FormImovel } from '../components/FormImovel'
 import {
   FormEditarInquilino,
@@ -34,6 +37,7 @@ type Janela =
   | { tipo: 'inquilino'; inquilino: Inquilino }
   | { tipo: 'reajuste'; locacao: LocacaoComInquilino }
   | { tipo: 'renovar'; locacao: LocacaoComInquilino }
+  | { tipo: 'contrato'; locacao: LocacaoComInquilino }
   | null
 
 /** "em 15 dias", "hoje", "há 3 dias" — distância de uma data até hoje. */
@@ -98,7 +102,7 @@ export function ImovelDetalhePage() {
   }
   if (!dados) return <p className="texto-suave">Carregando…</p>
 
-  const { imovel, locacoes, recebimentos, reajustes } = dados
+  const { imovel, proprietario, locacoes, recebimentos, reajustes } = dados
   const ativa = locacaoAtiva
   const fim = ativa ? fimDoContrato(ativa) : null
   const reajusteEm = ativa ? proximoReajuste(ativa) : null
@@ -116,7 +120,11 @@ export function ImovelDetalhePage() {
             {imovel.identificacao}{' '}
             {!imovel.ativo && <span className="selo selo--neutro">Desativado</span>}
           </h1>
-          <p className="texto-suave">{imovel.endereco}</p>
+          <p className="texto-suave">{formatarEndereco(imovel) || imovel.endereco}</p>
+          <p className="texto-suave texto-pequeno">
+            {[imovel.tipo, imovel.descricao].filter(Boolean).join(' · ')}
+            {proprietario ? <> · Proprietário: <Link to="/proprietarios">{proprietario.nome}</Link></> : <> · <em>sem proprietário vinculado</em></>}
+          </p>
           {imovel.observacoes && <p className="texto-suave texto-pequeno">{imovel.observacoes}</p>}
         </div>
         <div className="grupo-botoes">
@@ -130,6 +138,9 @@ export function ImovelDetalhePage() {
           <h2>Locação atual</h2>
           {ativa ? (
             <div className="grupo-botoes">
+              <button className="botao botao--pequeno botao--primario botao--com-icone" onClick={() => setJanela({ tipo: 'contrato', locacao: ativa })}>
+                <IconeDocumento tamanho={15} /> Gerar contrato
+              </button>
               <button className="botao botao--pequeno" onClick={() => setJanela({ tipo: 'editar-locacao', locacao: ativa })}>Editar locação</button>
               <button className="botao botao--pequeno" onClick={() => setJanela({ tipo: 'inquilino', inquilino: ativa.inquilino })}>Editar inquilino</button>
               <button className="botao botao--pequeno botao--discreto" onClick={() => setJanela({ tipo: 'encerrar', locacao: ativa })}>Encerrar locação</button>
@@ -144,6 +155,10 @@ export function ImovelDetalhePage() {
           <dl className="dados-grade">
             <div><dt>Inquilino</dt><dd>{ativa.inquilino.nome}</dd></div>
             <div><dt>Telefone</dt><dd>{ativa.inquilino.telefone ?? '—'}</dd></div>
+            <div><dt>CPF</dt><dd>{ativa.inquilino.cpf ?? '—'}</dd></div>
+            <div><dt>E-mail</dt><dd>{ativa.inquilino.email ?? '—'}</dd></div>
+            <div><dt>Garantia</dt><dd>{GARANTIAS[ativa.garantia]}{ativa.garantia === 'fiador' && ativa.fiador_nome ? ` — ${ativa.fiador_nome}` : ''}</dd></div>
+            <div><dt>Finalidade</dt><dd>{ativa.finalidade === 'comercial' ? 'Comercial' : 'Residencial'}</dd></div>
             <div><dt>Data de entrada</dt><dd>{formatarData(ativa.data_entrada)}</dd></div>
             <div><dt>Aluguel atual</dt><dd>{formatarMoeda(ativa.valor_aluguel)}</dd></div>
             <div><dt>Vencimento</dt><dd>Todo dia {ativa.dia_vencimento}</dd></div>
@@ -208,6 +223,7 @@ export function ImovelDetalhePage() {
                   <td data-rotulo="Saída">{formatarData(l.data_saida)}</td>
                   <td data-rotulo="Último aluguel" className="num">{formatarMoeda(l.valor_aluguel)}</td>
                   <td className="acoes">
+                    <button className="botao botao--pequeno botao--discreto" onClick={() => setJanela({ tipo: 'contrato', locacao: l })}>Contrato</button>
                     <button className="botao botao--pequeno botao--discreto" onClick={() => setJanela({ tipo: 'inquilino', inquilino: l.inquilino })}>Editar inquilino</button>
                   </td>
                 </tr>
@@ -285,6 +301,9 @@ export function ImovelDetalhePage() {
       )}
       {janelaAberta?.tipo === 'renovar' && (
         <FormRenovarContrato locacao={janelaAberta.locacao} aoFechar={() => fecharJanela()} aoSalvar={concluido} />
+      )}
+      {janelaAberta?.tipo === 'contrato' && (
+        <GerarContrato dados={{ imovel, proprietario, locacao: janelaAberta.locacao }} aoFechar={() => fecharJanela()} />
       )}
       {janelaAberta?.tipo === 'inquilino' && (
         <FormEditarInquilino inquilino={janelaAberta.inquilino} aoFechar={() => fecharJanela()} aoSalvar={() => concluido('Inquilino atualizado.')} />

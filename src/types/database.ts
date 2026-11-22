@@ -1,30 +1,91 @@
-// Tipos que espelham as tabelas criadas em supabase/migrations/0001_schema_inicial.sql.
+// Tipos que espelham as tabelas criadas em supabase/migrations/.
 // Datas chegam do banco como texto no formato "AAAA-MM-DD".
 
 export type SituacaoLocacao = 'ativa' | 'encerrada'
 export type SituacaoRecebimento = 'em_aberto' | 'pago' | 'atrasado'
+export type Finalidade = 'residencial' | 'comercial'
+export type Garantia = 'nenhuma' | 'caucao' | 'fiador' | 'seguro_fianca' | 'titulo_capitalizacao'
 
-export interface Imovel {
+/** Endereço separado em partes (imóvel, inquilino e proprietário). */
+export interface Endereco {
+  cep: string | null
+  logradouro: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
+  cidade: string | null
+  uf: string | null
+}
+
+/** Dados pessoais usados na qualificação das partes do contrato. */
+export interface Qualificacao {
+  rg: string | null
+  orgao_emissor: string | null
+  nacionalidade: string | null
+  estado_civil: string | null
+  profissao: string | null
+  email: string | null
+}
+
+export interface Imovel extends Endereco {
   id: string
   owner_id: string
   identificacao: string
-  endereco: string
+  endereco: string // endereço completo em uma linha (montado a partir das partes)
+  observacoes: string | null
+  tipo: string | null
+  descricao: string | null
+  proprietario_id: string | null
+  ativo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface Inquilino extends Endereco, Qualificacao {
+  id: string
+  owner_id: string
+  nome: string
+  telefone: string | null
+  cpf: string | null
+  data_nascimento: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Proprietario extends Endereco, Qualificacao {
+  id: string
+  owner_id: string
+  tipo_pessoa: 'fisica' | 'juridica'
+  nome: string
+  cpf_cnpj: string | null
+  telefone: string | null
+  pix: string | null
+  banco: string | null
+  agencia: string | null
+  conta: string | null
   observacoes: string | null
   ativo: boolean
   created_at: string
   updated_at: string
 }
 
-export interface Inquilino {
-  id: string
-  owner_id: string
-  nome: string
-  telefone: string | null
-  created_at: string
-  updated_at: string
+/** Condições do contrato guardadas na locação (multa e juros são só texto do contrato). */
+export interface CondicoesContrato {
+  finalidade: Finalidade
+  garantia: Garantia
+  valor_garantia: number | null
+  fiador_nome: string | null
+  fiador_cpf: string | null
+  fiador_qualificacao: string | null
+  multa_atraso_percentual: number | null
+  juros_atraso_percentual: number | null
+  multa_rescisao_alugueis: number | null
+  encargos_locatario: string | null
+  foro: string | null
+  clausulas_adicionais: string | null
 }
 
-export interface Locacao {
+export interface Locacao extends CondicoesContrato {
   id: string
   owner_id: string
   imovel_id: string
@@ -108,4 +169,26 @@ export interface ResumoMes {
   qtd_pagos: number
   qtd_em_aberto: number
   qtd_atrasados: number
+}
+
+/** Retorno da função resumo_geral() (aba Visão geral do dashboard). */
+export interface ResumoGeral {
+  contratos_ativos: number
+  receita_mensal_contratada: number
+  imoveis_ativos: number
+  imoveis_alugados: number
+  imoveis_vagos: number
+  proprietarios: number
+  recebido_ano: number
+  recebido_total: number
+  atrasados_qtd: number
+  atrasados_valor: number
+  contratos_vencendo_60d: number
+}
+
+export interface HistoricoMes {
+  mes_referencia: string
+  previsto: number
+  recebido: number
+  atrasado: number
 }

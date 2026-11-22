@@ -70,6 +70,14 @@ export function VerificacaoPage() {
         : { nome: 'Avisos e reajustes (script 0003)', estado: 'ok', detalhe: `${(avisos as unknown[]).length} aviso(s) agora` },
     )
 
+    // Proprietários, contrato e visão geral (0004_proprietarios_contrato.sql). Só leitura.
+    const { error: erroGeral } = await supabase.rpc('resumo_geral')
+    resultados.push(
+      erroGeral
+        ? { nome: 'Proprietários e contrato (script 0004)', estado: 'erro', detalhe: mensagemDeErro(erroGeral) }
+        : { nome: 'Proprietários e contrato (script 0004)', estado: 'ok' },
+    )
+
     return resultados
   }, [])
 

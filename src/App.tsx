@@ -11,6 +11,7 @@ import { ImoveisPage } from './pages/ImoveisPage'
 import { ImovelDetalhePage } from './pages/ImovelDetalhePage'
 import { RecebimentosPage } from './pages/RecebimentosPage'
 import { AvisosPage } from './pages/AvisosPage'
+import { ProprietariosPage } from './pages/ProprietariosPage'
 import { ConfiguracoesPage } from './pages/ConfiguracoesPage'
 
 export default function App() {
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="imoveis/:id" element={<ImovelDetalhePage />} />
             <Route path="recebimentos" element={<RecebimentosPage />} />
             <Route path="avisos" element={<AvisosPage />} />
+            <Route path="proprietarios" element={<ProprietariosPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
             <Route path="verificacao" element={<VerificacaoPage />} />
           </Route>

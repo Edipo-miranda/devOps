@@ -19,9 +19,11 @@ Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e i
 │   ├── migrations/0001_schema_inicial.sql   ← cria tabelas, regras, segurança e funções
 │   ├── migrations/0002_funcoes_cadastro.sql ← cadastro "tudo ou nada" e encerramento de locação
 │   ├── migrations/0003_contratos_avisos.sql ← prazo de contrato, reajustes e avisos
+│   ├── migrations/0004_proprietarios_contrato.sql ← proprietários, dados p/ contrato, visão geral
 │   ├── tests/0001_verificar_banco.sql       ← testa o banco e apaga tudo que criou
 │   ├── tests/0002_verificar_funcoes_cadastro.sql
-│   └── tests/0003_verificar_contratos_avisos.sql
+│   ├── tests/0003_verificar_contratos_avisos.sql
+│   └── tests/0004_verificar_proprietarios_contrato.sql
 ├── src/
 │   ├── lib/supabase.ts       ← conexão com o Supabase (só chave pública)
 │   ├── lib/erros.ts          ← traduz erros para mensagens em português
@@ -247,6 +249,18 @@ Depois de publicado na Vercel (endereço `https://...vercel.app`):
 
 O ícone "Aluguéis" aparece na tela inicial e o app abre em tela cheia. Ele precisa de internet
 (os dados ficam no Supabase) e se atualiza sozinho a cada nova publicação.
+
+## Contrato em PDF e proprietários (script 0004)
+
+1. Com o app parado: `git pull` e `npm install`.
+2. Supabase → **SQL Editor**: rode `supabase/migrations/0004_proprietarios_contrato.sql` → *Success*.
+3. Rode `supabase/tests/0004_verificar_proprietarios_contrato.sql` → **12 linhas OK**.
+4. No app: cadastre o **proprietário** (menu Proprietários), vincule-o ao imóvel (**Editar imóvel**), complete
+   os dados do inquilino (**Editar inquilino**) e as **Condições do contrato** (**Editar locação**).
+5. Na página do imóvel, clique em **Gerar contrato** → confira as pendências → **Baixar PDF** ou **Enviar**.
+
+Assinatura: no papel (imprimir e rubricar cada página) ou, de graça pela internet, no **Assinador gov.br**
+(assinador.iti.br). O texto é um modelo baseado na Lei nº 8.245/1991 — recomenda-se revisão por advogado.
 
 ## Dar acesso a outra pessoa
 

@@ -1,8 +1,19 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { CampoData } from './CampoData'
 import { Modal } from './Modal'
-import { Campo, CamposContrato, CamposLocacao } from './CamposLocacao'
-import { validarContrato, validarLocacao, valoresLocacaoIniciais, type ErrosLocacao, type ValoresContrato } from '../lib/validacaoLocacao'
+import { Campo, CamposCondicoes, CamposContrato, CamposLocacao, Secao } from './CamposLocacao'
+import { CamposPessoa } from './CamposPessoa'
+import { pessoaForm, validarPessoa } from '../lib/formularios'
+import {
+  condicoesForm,
+  errosComPrefixo,
+  validarCondicoes,
+  validarContrato,
+  validarLocacao,
+  valoresLocacaoIniciais,
+  type ErrosLocacao,
+  type ValoresContrato,
+} from '../lib/validacaoLocacao'
 import {
   atualizarInquilino,
   atualizarLocacao,
@@ -17,7 +28,7 @@ import {
   type LocacaoComInquilino,
 } from '../lib/api'
 import { mensagemDeErro } from '../lib/erros'
-import { REGEX_DATA, REGEX_TELEFONE, adicionarMeses, formatarData, formatarMoeda, hojeBrasil, lerValor, valorParaCampo } from '../lib/format'
+import { REGEX_DATA, adicionarMeses, formatarData, formatarMoeda, hojeBrasil, lerValor, valorParaCampo } from '../lib/format'
 import type { Inquilino } from '../types/database'
 
 function Rodape({ salvando, aoFechar, rotulo = 'Salvar' }: { salvando: boolean; aoFechar: () => void; rotulo?: string }) {
@@ -83,6 +94,7 @@ export function FormEditarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: Lo
     prazo: locacao.prazo_meses ? String(locacao.prazo_meses) : '',
     reajuste: locacao.reajuste_meses ? String(locacao.reajuste_meses) : '',
   })
+  const [condicoes, setCondicoes] = useState(() => condicoesForm(locacao))
   const [inicioContrato, setInicioContrato] = useState(locacao.data_inicio_contrato)
   const [ultimoReajuste, setUltimoReajuste] = useState(locacao.data_ultimo_reajuste ?? '')
   const [erros, setErros] = useState<Record<string, string>>({})
@@ -103,6 +115,8 @@ export function FormEditarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: Lo
     if (ultimoReajuste && ultimoReajuste < dataEntrada) novos.ultimoReajuste = 'Não pode ser antes da data de entrada.'
     const c = validarContrato(contrato)
     Object.assign(novos, c.erros)
+    const cond = validarCondicoes(condicoes)
+    for (const [k, m] of Object.entries(cond.erros)) novos['cond.' + k] = m
     setErros(novos)
     if (Object.keys(novos).length) return
 
@@ -116,6 +130,7 @@ export function FormEditarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: Lo
         data_inicio_contrato: inicioContrato,
         reajuste_meses: c.reajuste,
         data_ultimo_reajuste: ultimoReajuste || null,
+        ...cond.dados,
       })
       invalidarMesAtual()
       aoSalvar()
@@ -153,6 +168,9 @@ export function FormEditarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: Lo
             <CampoData valor={ultimoReajuste} aoMudar={setUltimoReajuste} />
           </Campo>
         </div>
+        <Secao titulo="Condições do contrato" dica="garantia, multa, foro e cláusulas" temErro={Object.keys(errosComPrefixo(erros, 'cond.')).length > 0}>
+          <CamposCondicoes valores={condicoes} aoMudar={setCondicoes} erros={errosComPrefixo(erros, 'cond.')} />
+        </Secao>
         {erroGeral && <p className="alerta alerta--erro" role="alert">{erroGeral}</p>}
         <Rodape salvando={salvando} aoFechar={aoFechar} />
       </form>
@@ -346,8 +364,7 @@ export function FormEncerrarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: 
 // --------------------------------------------------------- Editar inquilino
 
 export function FormEditarInquilino({ inquilino, aoFechar, aoSalvar }: { inquilino: Inquilino; aoFechar: () => void; aoSalvar: () => void }) {
-  const [nome, setNome] = useState(inquilino.nome)
-  const [telefone, setTelefone] = useState(inquilino.telefone ?? '')
+  const [pessoa, setPessoa] = useState(() => pessoaForm(inquilino as unknown as Record<string, unknown>))
   const [erros, setErros] = useState<Record<string, string>>({})
   const [erroGeral, setErroGeral] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
@@ -355,31 +372,26 @@ export function FormEditarInquilino({ inquilino, aoFechar, aoSalvar }: { inquili
   async function salvar(e: FormEvent) {
     e.preventDefault()
     setErroGeral(null)
-    const novos: Record<string, string> = {}
-    if (nome.trim().length < 2) novos.nome = 'Informe o nome (mínimo 2 letras).'
-    if (telefone.trim() && !REGEX_TELEFONE.test(telefone.trim())) novos.telefone = 'Telefone inválido.'
+    const { erros: novos, dados } = validarPessoa(pessoa)
     setErros(novos)
     if (Object.keys(novos).length) return
+    const { documento, ...resto } = dados
     setSalvando(true)
     try {
-      await atualizarInquilino(inquilino.id, nome.trim(), telefone.trim() || null)
+      await atualizarInquilino(inquilino.id, { ...resto, cpf: documento })
       aoSalvar()
     } catch (err) {
-      setErroGeral(mensagemDeErro(err))
+      const e = err as { code?: string }
+      setErroGeral(e.code === '23505' ? 'Já existe outro inquilino com esse CPF.' : mensagemDeErro(err))
     } finally {
       setSalvando(false)
     }
   }
 
   return (
-    <Modal titulo="Editar inquilino" aoFechar={aoFechar}>
+    <Modal titulo="Editar inquilino" aoFechar={aoFechar} largo>
       <form onSubmit={salvar} noValidate>
-        <Campo rotulo="Nome" erro={erros.nome}>
-          <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={150} />
-        </Campo>
-        <Campo rotulo="Telefone" dica="opcional" erro={erros.telefone}>
-          <input value={telefone} onChange={(e) => setTelefone(e.target.value)} inputMode="tel" maxLength={20} />
-        </Campo>
+        <CamposPessoa valores={pessoa} aoMudar={setPessoa} erros={erros} comNascimento rotuloEndereco="Endereço do inquilino (opcional)" />
         {erroGeral && <p className="alerta alerta--erro" role="alert">{erroGeral}</p>}
         <Rodape salvando={salvando} aoFechar={aoFechar} />
       </form>

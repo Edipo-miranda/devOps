@@ -5,8 +5,13 @@ import { notificarAlteracao } from './eventos'
 import { adicionarMeses, inicioDoMes } from './format'
 import type {
   Aviso,
+  CondicoesContrato,
   Configuracoes,
+  Endereco,
+  HistoricoMes,
   Imovel,
+  Proprietario,
+  ResumoGeral,
   Inquilino,
   Locacao,
   Reajuste,
@@ -21,6 +26,7 @@ export interface LocacaoComInquilino extends Locacao {
 
 export interface ImovelComLocacao extends Imovel {
   locacao_ativa: LocacaoComInquilino | null
+  proprietario: Pick<Proprietario, 'id' | 'nome'> | null
 }
 
 // ---------------------------------------------------------------- Imóveis
@@ -28,58 +34,75 @@ export interface ImovelComLocacao extends Imovel {
 export async function listarImoveis(): Promise<ImovelComLocacao[]> {
   const { data, error } = await supabase
     .from('imoveis')
-    .select('*, locacoes(*, inquilino:inquilinos(*))')
+    .select('*, locacoes(*, inquilino:inquilinos(*)), proprietario:proprietarios(id, nome)')
     .order('identificacao')
   if (error) throw error
   return (data ?? []).map((i) => {
-    const { locacoes, ...imovel } = i as Imovel & { locacoes: LocacaoComInquilino[] }
+    const { locacoes, ...imovel } = i as ImovelComLocacao & { locacoes: LocacaoComInquilino[] }
     return { ...imovel, locacao_ativa: locacoes.find((l) => l.situacao === 'ativa') ?? null }
   })
 }
 
-export async function buscarImovel(id: string): Promise<{ imovel: Imovel; locacoes: LocacaoComInquilino[] }> {
+export interface DetalheImovel {
+  imovel: Imovel
+  proprietario: Proprietario | null
+  locacoes: LocacaoComInquilino[]
+}
+
+export async function buscarImovel(id: string): Promise<DetalheImovel> {
   const { data, error } = await supabase
     .from('imoveis')
-    .select('*, locacoes(*, inquilino:inquilinos(*))')
+    .select('*, locacoes(*, inquilino:inquilinos(*)), proprietario:proprietarios(*)')
     .eq('id', id)
     .maybeSingle()
   if (error) throw error
   if (!data) throw new Error('Imóvel não encontrado.')
-  const { locacoes, ...imovel } = data as Imovel & { locacoes: LocacaoComInquilino[] }
+  const { locacoes, proprietario, ...imovel } = data as Imovel & { locacoes: LocacaoComInquilino[]; proprietario: Proprietario | null }
   locacoes.sort((a, b) => b.data_entrada.localeCompare(a.data_entrada))
-  return { imovel, locacoes }
+  return { imovel, proprietario, locacoes }
 }
 
-export interface DadosImovel {
+export interface DadosImovel extends Endereco {
   identificacao: string
-  endereco: string
+  endereco: string // linha completa, montada a partir das partes
   observacoes: string | null
+  tipo: string | null
+  descricao: string | null
+  proprietario_id: string | null
+}
+
+/** Dados do inquilino com os nomes das colunas do banco. */
+export interface DadosInquilino extends Endereco {
+  nome: string
+  telefone: string | null
+  cpf: string | null
+  rg: string | null
+  orgao_emissor: string | null
+  nacionalidade: string | null
+  estado_civil: string | null
+  profissao: string | null
+  email: string | null
+  data_nascimento: string | null
 }
 
 export interface DadosNovaLocacao {
-  inquilino_id: string | null
-  inquilino_nome: string | null
-  inquilino_telefone: string | null
-  data_entrada: string
-  valor_aluguel: number
-  dia_vencimento: number
-  prazo_meses: number | null
-  reajuste_meses: number | null
+  inquilino_id: string | null // inquilino já cadastrado...
+  inquilino: DadosInquilino | null // ...ou novo
+  locacao: {
+    data_entrada: string
+    valor_aluguel: number
+    dia_vencimento: number
+    prazo_meses: number | null
+    reajuste_meses: number | null
+  } & CondicoesContrato
 }
 
 export async function cadastrarImovel(imovel: DadosImovel, locacao: DadosNovaLocacao | null): Promise<string> {
-  const { data, error } = await supabase.rpc('cadastrar_imovel', {
-    p_identificacao: imovel.identificacao,
-    p_endereco: imovel.endereco,
-    p_observacoes: imovel.observacoes,
+  const { data, error } = await supabase.rpc('salvar_imovel', {
+    p_imovel: imovel,
     p_inquilino_id: locacao?.inquilino_id ?? null,
-    p_inquilino_nome: locacao?.inquilino_nome ?? null,
-    p_inquilino_telefone: locacao?.inquilino_telefone ?? null,
-    p_data_entrada: locacao?.data_entrada ?? null,
-    p_valor_aluguel: locacao?.valor_aluguel ?? null,
-    p_dia_vencimento: locacao?.dia_vencimento ?? null,
-    p_prazo_meses: locacao?.prazo_meses ?? null,
-    p_reajuste_meses: locacao?.reajuste_meses ?? null,
+    p_inquilino: locacao?.inquilino ?? null,
+    p_locacao: locacao?.locacao ?? null,
   })
   if (error) throw error
   notificarAlteracao()
@@ -106,29 +129,24 @@ export async function listarInquilinos(): Promise<Inquilino[]> {
   return data ?? []
 }
 
-export async function atualizarInquilino(id: string, nome: string, telefone: string | null): Promise<void> {
-  const { error } = await supabase.from('inquilinos').update({ nome, telefone }).eq('id', id)
+export async function atualizarInquilino(id: string, dados: DadosInquilino): Promise<void> {
+  const { error } = await supabase.from('inquilinos').update(dados).eq('id', id)
   if (error) throw error
   notificarAlteracao()
 }
 
 export async function registrarLocacao(imovelId: string, l: DadosNovaLocacao): Promise<void> {
-  const { error } = await supabase.rpc('registrar_locacao', {
+  const { error } = await supabase.rpc('salvar_locacao', {
     p_imovel_id: imovelId,
     p_inquilino_id: l.inquilino_id,
-    p_inquilino_nome: l.inquilino_nome,
-    p_inquilino_telefone: l.inquilino_telefone,
-    p_data_entrada: l.data_entrada,
-    p_valor_aluguel: l.valor_aluguel,
-    p_dia_vencimento: l.dia_vencimento,
-    p_prazo_meses: l.prazo_meses,
-    p_reajuste_meses: l.reajuste_meses,
+    p_inquilino: l.inquilino,
+    p_locacao: l.locacao,
   })
   if (error) throw error
   notificarAlteracao()
 }
 
-export interface DadosEdicaoLocacao {
+export interface DadosEdicaoLocacao extends Partial<CondicoesContrato> {
   data_entrada: string
   valor_aluguel: number
   dia_vencimento: number
@@ -355,4 +373,52 @@ export async function salvarConfiguracoes(c: Configuracoes): Promise<void> {
   if (error) throw error
   invalidarMesAtual()
   notificarAlteracao()
+}
+
+// ----------------------------------------------------------- Proprietários
+
+export type DadosProprietario = Omit<Proprietario, 'id' | 'owner_id' | 'ativo' | 'created_at' | 'updated_at'>
+
+export async function listarProprietarios(): Promise<(Proprietario & { imoveis: { count: number }[] })[]> {
+  const { data, error } = await supabase.from('proprietarios').select('*, imoveis(count)').order('nome')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function salvarProprietario(id: string | null, dados: DadosProprietario): Promise<string> {
+  const q = id
+    ? supabase.from('proprietarios').update(dados).eq('id', id).select('id').single()
+    : supabase.from('proprietarios').insert(dados).select('id').single()
+  const { data, error } = await q
+  if (error) throw error
+  notificarAlteracao()
+  return data.id as string
+}
+
+export async function definirProprietarioAtivo(id: string, ativo: boolean): Promise<void> {
+  const { error } = await supabase.from('proprietarios').update({ ativo }).eq('id', id)
+  if (error) throw error
+  notificarAlteracao()
+}
+
+// ------------------------------------------------------ Dashboard (geral)
+
+export async function resumoGeral(): Promise<ResumoGeral> {
+  const { data, error } = await supabase.rpc('resumo_geral')
+  if (error) throw error
+  const l = (data as ResumoGeral[])[0]
+  const r = {} as Record<string, number>
+  for (const [k, v] of Object.entries(l)) r[k] = Number(v)
+  return r as unknown as ResumoGeral
+}
+
+export async function historicoMensal(meses = 12): Promise<HistoricoMes[]> {
+  const { data, error } = await supabase.rpc('historico_mensal', { p_meses: meses })
+  if (error) throw error
+  return ((data ?? []) as HistoricoMes[]).map((h) => ({
+    mes_referencia: h.mes_referencia,
+    previsto: Number(h.previsto),
+    recebido: Number(h.recebido),
+    atrasado: Number(h.atrasado),
+  }))
 }

@@ -9,8 +9,10 @@ import { MESES, formatarData, formatarMoeda, mesAtualBrasil } from '../lib/forma
 import { useCarregar } from '../lib/useCarregar'
 import { SeloSituacao } from '../components/SeloSituacao'
 import { IconeAlerta, IconeAlvo, IconeCheck, IconeRelogio } from '../components/Icones'
+import { VisaoGeral } from '../components/VisaoGeral'
 
-export function DashboardPage() {
+/** Aba "Mês": resumo do mês escolhido, avisos e o que falta receber. */
+function AbaMes() {
   const [params, setParams] = useSearchParams()
   const atual = mesAtualBrasil()
   const ano = Number(params.get('ano')) || atual.ano
@@ -150,5 +152,24 @@ export function DashboardPage() {
       )}
       <Aviso aviso={aviso} aoFechar={fecharAviso} />
     </section>
+  )
+}
+
+export function DashboardPage() {
+  const [params, setParams] = useSearchParams()
+  const aba = params.get('aba') === 'geral' ? 'geral' : 'mes'
+
+  return (
+    <>
+      <div className="abas" role="tablist" aria-label="Visão do dashboard">
+        <button role="tab" aria-selected={aba === 'mes'} className={aba === 'mes' ? 'ativa' : ''} onClick={() => setParams({})}>
+          Mês
+        </button>
+        <button role="tab" aria-selected={aba === 'geral'} className={aba === 'geral' ? 'ativa' : ''} onClick={() => setParams({ aba: 'geral' })}>
+          Visão geral
+        </button>
+      </div>
+      {aba === 'mes' ? <AbaMes /> : <VisaoGeral />}
+    </>
   )
 }

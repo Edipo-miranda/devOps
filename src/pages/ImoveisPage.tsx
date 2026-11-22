@@ -22,7 +22,7 @@ export function ImoveisPage() {
       if (filtro === 'ativos' && !i.ativo) return false
       if (filtro === 'inativos' && i.ativo) return false
       if (!termo) return true
-      return [i.identificacao, i.endereco, i.locacao_ativa?.inquilino.nome ?? ''].some((t) => normalizar(t).includes(termo))
+      return [i.identificacao, i.endereco, i.locacao_ativa?.inquilino.nome ?? '', i.proprietario?.nome ?? ''].some((t) => normalizar(t).includes(termo))
     })
   }, [dados, filtro, busca])
 
@@ -82,6 +82,7 @@ export function ImoveisPage() {
                     <td data-rotulo="Imóvel">
                       <Link to={`/imoveis/${i.id}`} className="destaque" onClick={(e) => e.stopPropagation()}>{i.identificacao}</Link>
                       <div className="texto-suave texto-pequeno">{i.endereco}</div>
+                      {i.proprietario && <div className="texto-suave texto-pequeno">Proprietário: {i.proprietario.nome}</div>}
                     </td>
                     <td data-rotulo="Inquilino">{l ? l.inquilino.nome : <span className="texto-suave">—</span>}</td>
                     <td data-rotulo="Desde">{l ? formatarData(l.data_entrada) : '—'}</td>
