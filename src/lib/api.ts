@@ -7,6 +7,8 @@ import type {
   Aviso,
   CondicoesContrato,
   Configuracoes,
+  ControleCaucao,
+  Despesa,
   Endereco,
   HistoricoMes,
   Imovel,
@@ -69,6 +71,17 @@ export interface DadosImovel extends Endereco {
   tipo: string | null
   descricao: string | null
   proprietario_id: string | null
+  matricula: string | null
+  cartorio: string | null
+  inscricao_iptu: string | null
+  valor_iptu_anual: number | null
+  area_m2: number | null
+  quartos: number | null
+  banheiros: number | null
+  vagas: number | null
+  valor_condominio: number | null
+  uc_energia: string | null
+  uc_agua: string | null
 }
 
 /** Dados do inquilino com os nomes das colunas do banco. */
@@ -149,7 +162,7 @@ export async function registrarLocacao(imovelId: string, l: DadosNovaLocacao): P
   notificarAlteracao()
 }
 
-export interface DadosEdicaoLocacao extends Partial<CondicoesContrato> {
+export interface DadosEdicaoLocacao extends Partial<CondicoesContrato>, Partial<ControleCaucao> {
   data_entrada: string
   valor_aluguel: number
   dia_vencimento: number
@@ -295,7 +308,7 @@ export async function listarRecebimentosDoImovel(imovelId: string): Promise<Rece
 
 export async function registrarPagamento(
   id: string,
-  dados: { valor_recebido: number; data_pagamento: string; observacao: string | null },
+  dados: { valor_recebido: number; data_pagamento: string; observacao: string | null; valor_encargos: number | null },
 ): Promise<void> {
   const { error } = await supabase.from('recebimentos').update(dados).eq('id', id)
   if (error) throw error
@@ -305,7 +318,7 @@ export async function registrarPagamento(
 export async function desfazerPagamento(id: string): Promise<void> {
   const { error } = await supabase
     .from('recebimentos')
-    .update({ valor_recebido: null, data_pagamento: null })
+    .update({ valor_recebido: null, data_pagamento: null, valor_encargos: null })
     .eq('id', id)
   if (error) throw error
   notificarAlteracao()
@@ -360,10 +373,10 @@ export async function buscarRecebimento(id: string): Promise<RecebimentoDetalhad
   return data as RecebimentoDetalhado
 }
 
-export const CONFIG_PADRAO: Configuracoes = { dias_aviso_parcela: 3, dias_aviso_contrato: 60 }
+export const CONFIG_PADRAO: Configuracoes = { dias_aviso_parcela: 3, dias_aviso_contrato: 60, cobrar_encargos: true }
 
 export async function lerConfiguracoes(): Promise<Configuracoes> {
-  const { data, error } = await supabase.from('configuracoes').select('dias_aviso_parcela, dias_aviso_contrato').maybeSingle()
+  const { data, error } = await supabase.from('configuracoes').select('dias_aviso_parcela, dias_aviso_contrato, cobrar_encargos').maybeSingle()
   if (error) throw error
   return data ?? CONFIG_PADRAO
 }
@@ -518,4 +531,49 @@ export async function excluirImovel(id: string): Promise<void> {
   if (error) throw error
   invalidarMesAtual()
   notificarAlteracao()
+}
+
+// ----------------------------------------------------------------- Despesas
+
+export type DadosDespesa = Pick<Despesa, 'imovel_id' | 'data' | 'categoria' | 'descricao' | 'valor' | 'dedutivel'>
+
+export async function listarDespesas(filtro: { imovelId?: string; ano?: number }): Promise<Despesa[]> {
+  let q = supabase.from('despesas').select('*')
+  if (filtro.imovelId) q = q.eq('imovel_id', filtro.imovelId)
+  if (filtro.ano) q = q.gte('data', `${filtro.ano}-01-01`).lte('data', `${filtro.ano}-12-31`)
+  const { data, error } = await q.order('data', { ascending: false })
+  if (error) throw error
+  return ((data ?? []) as Despesa[]).map((d) => ({ ...d, valor: Number(d.valor) }))
+}
+
+export async function salvarDespesa(id: string | null, dados: DadosDespesa): Promise<void> {
+  const { error } = id ? await supabase.from('despesas').update(dados).eq('id', id) : await supabase.from('despesas').insert(dados)
+  if (error) throw error
+  notificarAlteracao()
+}
+
+export async function excluirDespesa(id: string): Promise<void> {
+  const { error } = await supabase.from('despesas').delete().eq('id', id)
+  if (error) throw error
+  notificarAlteracao()
+}
+
+/** Recebimentos PAGOS num ano, pela data do pagamento (regime de caixa, como no carnê-leão). */
+export async function recebimentosPagosNoAno(ano: number): Promise<RecebimentoDetalhado[]> {
+  const { data, error } = await supabase
+    .from('vw_recebimentos')
+    .select('*')
+    .gte('data_pagamento', `${ano}-01-01`)
+    .lte('data_pagamento', `${ano}-12-31`)
+    .order('data_pagamento')
+  if (error) throw error
+  return (data ?? []) as RecebimentoDetalhado[]
+}
+
+/** Vários lançamentos pelo id (usado nos avisos para montar a cobrança). */
+export async function buscarRecebimentos(ids: string[]): Promise<RecebimentoDetalhado[]> {
+  if (ids.length === 0) return []
+  const { data, error } = await supabase.from('vw_recebimentos').select('*').in('id', ids)
+  if (error) throw error
+  return (data ?? []) as RecebimentoDetalhado[]
 }

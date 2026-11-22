@@ -22,12 +22,14 @@ Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e i
 │   ├── migrations/0004_proprietarios_contrato.sql ← proprietários, dados p/ contrato, visão geral
 │   ├── migrations/0005_contrato_revisado_exclusao.sql ← índice de reajuste, IPTU, gênero, exclusão
 │   ├── migrations/0006_venda_exclusao_imovel.sql ← imóvel vendido e exclusão de imóvel
+│   ├── migrations/0007_financeiro_documentos.sql ← despesas, multa/juros, matrícula/IPTU, caução
 │   ├── tests/0001_verificar_banco.sql       ← testa o banco e apaga tudo que criou
 │   ├── tests/0002_verificar_funcoes_cadastro.sql
 │   ├── tests/0003_verificar_contratos_avisos.sql
 │   ├── tests/0004_verificar_proprietarios_contrato.sql
 │   ├── tests/0005_verificar_contrato_exclusao.sql
-│   └── tests/0006_verificar_venda_exclusao_imovel.sql
+│   ├── tests/0006_verificar_venda_exclusao_imovel.sql
+│   └── tests/0007_verificar_financeiro.sql
 ├── src/
 │   ├── lib/supabase.ts       ← conexão com o Supabase (só chave pública)
 │   ├── lib/erros.ts          ← traduz erros para mensagens em português
@@ -285,6 +287,24 @@ Assinatura: no papel (imprimir e rubricar cada página) ou, de graça pela inter
    data/valor/comprador e tira o imóvel das listas ativas. **Todo o histórico de pagamentos continua**
    (importante para o Imposto de Renda). "Desfazer venda" reativa o imóvel, se marcou por engano.
 4. **Cadastro de teste ou errado?** **Excluir**: apaga o imóvel e toda a movimentação dele (os inquilinos ficam).
+
+## Financeiro, cobrança, recibos e relatórios (script 0007)
+
+1. Supabase → **SQL Editor**: rode `supabase/migrations/0007_financeiro_documentos.sql` → *Success*.
+2. Rode `supabase/tests/0007_verificar_financeiro.sql` → **8 linhas OK**.
+3. Novidades:
+   - **Cobrar / Lembrar pelo WhatsApp** (Recebimentos e Avisos): mensagem pronta com valor, vencimento, PIX e,
+     se atrasado, multa e juros até hoje.
+   - **Multa e juros automáticos** ao registrar pagamento atrasado (pro rata die), com opção de não cobrar
+     (por pagamento ou em Configurações).
+   - **Recibo em PDF** de cada pagamento.
+   - **Reajuste**: busca a variação acumulada do IPCA/IGP-M/INPC no Banco Central (função `api/indice.js`
+     na Vercel), calcula o novo valor e gera a **carta de reajuste em PDF**.
+   - **Despesas por imóvel** (IPTU, condomínio, manutenção…) e lucro líquido.
+   - **Relatórios e IR**: mês a mês (carnê-leão), por pagador, por imóvel; **PDF para o contador** e **Excel**;
+     exportação dos cadastros.
+   - **Imóvel**: matrícula, cartório, inscrição e valor do IPTU, condomínio, área, cômodos, contas de luz/água.
+   - **Caução**: datas de recebimento/devolução e valor devolvido.
 
 ## Dar acesso a outra pessoa
 

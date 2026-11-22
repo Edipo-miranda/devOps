@@ -94,6 +94,14 @@ export function VerificacaoPage() {
         : { nome: 'Venda e exclusão de imóvel (script 0006)', estado: 'erro', detalhe: erroImovel ? mensagemDeErro(erroImovel) : 'Resposta inesperada do banco.' },
     )
 
+    // Financeiro e documentos (0007). Só leitura.
+    const { error: erroDespesas } = await supabase.from('despesas').select('id', { count: 'exact', head: true })
+    resultados.push(
+      erroDespesas
+        ? { nome: 'Despesas, recibos e relatórios (script 0007)', estado: 'erro', detalhe: mensagemDeErro(erroDespesas) }
+        : { nome: 'Despesas, recibos e relatórios (script 0007)', estado: 'ok' },
+    )
+
     return resultados
   }, [])
 

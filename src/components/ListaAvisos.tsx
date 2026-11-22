@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FormPagamento } from './FormsRecebimento'
-import { buscarRecebimento } from '../lib/api'
+import { buscarRecebimento, buscarRecebimentos, lerConfiguracoes } from '../lib/api'
+import { useCarregar } from '../lib/useCarregar'
+import { linkWhatsApp, mensagemCobranca } from '../lib/whatsapp'
 import { mensagemDeErro } from '../lib/erros'
 import { formatarData, formatarMoeda } from '../lib/format'
 import type { Aviso, RecebimentoDetalhado, TipoAviso } from '../types/database'
@@ -46,6 +48,12 @@ interface Props {
 export function ListaAvisos({ avisos, aoAlterar, aoErro }: Props) {
   const [pagando, setPagando] = useState<RecebimentoDetalhado | null>(null)
   const [abrindo, setAbrindo] = useState<string | null>(null)
+  // Dados dos lançamentos dos avisos de parcela, para montar a mensagem do WhatsApp.
+  const ids = avisos.map((a) => a.recebimento_id).filter((x): x is string => Boolean(x))
+  const { dados: extra } = useCarregar(async () => {
+    const [recs, config] = await Promise.all([buscarRecebimentos(ids), lerConfiguracoes()])
+    return { recs: new Map(recs.map((r) => [r.id, r])), cobrar: config.cobrar_encargos }
+  }, [ids.join(',')])
 
   async function abrirPagamento(id: string) {
     setAbrindo(id)
@@ -76,11 +84,20 @@ export function ListaAvisos({ avisos, aoAlterar, aoErro }: Props) {
                   Registrar pagamento
                 </button>
               )}
+              {a.recebimento_id && extra?.recs.get(a.recebimento_id) && (() => {
+                const r = extra.recs.get(a.recebimento_id!)!
+                return (
+                  <a className="botao botao--pequeno botao--whatsapp" target="_blank" rel="noreferrer"
+                    href={linkWhatsApp(r.inquilino_telefone, mensagemCobranca(r, extra.cobrar))}>
+                    {a.tipo === 'parcela_atrasada' ? 'Cobrar' : 'Lembrar'}
+                  </a>
+                )
+              })()}
               {a.tipo === 'fim_contrato' && (
                 <Link className="botao botao--pequeno" to={`/imoveis/${a.imovel_id}?acao=renovar`}>Renovar / encerrar</Link>
               )}
               {a.tipo === 'reajuste' && (
-                <Link className="botao botao--pequeno" to={`/imoveis/${a.imovel_id}?acao=reajuste`}>Registrar reajuste</Link>
+                <Link className="botao botao--pequeno" to={`/imoveis/${a.imovel_id}?acao=reajuste`}>Calcular reajuste</Link>
               )}
             </div>
           </li>

@@ -1,9 +1,13 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { CampoData } from './CampoData'
 import { Modal } from './Modal'
 import { Campo, CamposCondicoes, CamposContrato, CamposLocacao, Secao } from './CamposLocacao'
 import { CamposPessoa } from './CamposPessoa'
 import { INDICE_COMPLETO } from '../lib/documentos'
+import { montarCartaReajuste } from '../lib/documentosPdf'
+import { INDICES_AUTOMATICOS, variacaoAcumulada, type ResultadoIndice } from '../lib/indices'
+import { entregarArquivo, gerarPdf, nomeArquivo, podeCompartilharArquivos } from '../lib/pdf'
+import { IconeDocumento } from './Icones'
 import { ExcluirInquilino } from './ExcluirInquilino'
 import { pessoaForm, validarPessoa } from '../lib/formularios'
 import {
@@ -31,7 +35,7 @@ import {
 } from '../lib/api'
 import { mensagemDeErro } from '../lib/erros'
 import { REGEX_DATA, adicionarMeses, formatarData, formatarMoeda, hojeBrasil, lerValor, valorParaCampo } from '../lib/format'
-import type { Inquilino } from '../types/database'
+import type { Imovel, Inquilino, Proprietario } from '../types/database'
 
 function Rodape({ salvando, aoFechar, rotulo = 'Salvar' }: { salvando: boolean; aoFechar: () => void; rotulo?: string }) {
   return (
@@ -97,6 +101,11 @@ export function FormEditarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: Lo
     reajuste: locacao.reajuste_meses ? String(locacao.reajuste_meses) : '',
   })
   const [condicoes, setCondicoes] = useState(() => condicoesForm(locacao))
+  const [caucao, setCaucao] = useState({
+    recebida: locacao.caucao_recebida_em ?? '',
+    devolvida: locacao.caucao_devolvida_em ?? '',
+    valorDevolvido: locacao.caucao_valor_devolvido ? valorParaCampo(locacao.caucao_valor_devolvido) : '',
+  })
   const [inicioContrato, setInicioContrato] = useState(locacao.data_inicio_contrato)
   const [ultimoReajuste, setUltimoReajuste] = useState(locacao.data_ultimo_reajuste ?? '')
   const [erros, setErros] = useState<Record<string, string>>({})
@@ -119,6 +128,9 @@ export function FormEditarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: Lo
     Object.assign(novos, c.erros)
     const cond = validarCondicoes(condicoes)
     for (const [k, m] of Object.entries(cond.erros)) novos['cond.' + k] = m
+    const devolvido = caucao.valorDevolvido.trim() ? lerValor(caucao.valorDevolvido) : null
+    if (caucao.valorDevolvido.trim() && devolvido === null) novos.caucaoValor = 'Valor inválido.'
+    if (caucao.recebida && caucao.devolvida && caucao.devolvida < caucao.recebida) novos.caucaoDevolvida = 'Não pode ser antes do recebimento.'
     setErros(novos)
     if (Object.keys(novos).length) return
 
@@ -133,6 +145,9 @@ export function FormEditarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: Lo
         reajuste_meses: c.reajuste,
         data_ultimo_reajuste: ultimoReajuste || null,
         ...cond.dados,
+        caucao_recebida_em: cond.dados.garantia === 'caucao' ? caucao.recebida || null : null,
+        caucao_devolvida_em: cond.dados.garantia === 'caucao' ? caucao.devolvida || null : null,
+        caucao_valor_devolvido: cond.dados.garantia === 'caucao' ? devolvido : null,
       })
       invalidarMesAtual()
       aoSalvar()
@@ -172,6 +187,22 @@ export function FormEditarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: Lo
         </div>
         <Secao titulo="Condições do contrato" dica="garantia, multa, foro e cláusulas" temErro={Object.keys(errosComPrefixo(erros, 'cond.')).length > 0}>
           <CamposCondicoes valores={condicoes} aoMudar={setCondicoes} erros={errosComPrefixo(erros, 'cond.')} />
+          {condicoes.garantia === 'caucao' && (
+            <>
+              <p className="subtitulo-form">Controle da caução</p>
+              <div className="grade-3">
+                <Campo rotulo="Recebida em">
+                  <CampoData valor={caucao.recebida} aoMudar={(v) => setCaucao({ ...caucao, recebida: v })} />
+                </Campo>
+                <Campo rotulo="Devolvida em" dica="na saída" erro={erros.caucaoDevolvida}>
+                  <CampoData valor={caucao.devolvida} aoMudar={(v) => setCaucao({ ...caucao, devolvida: v })} />
+                </Campo>
+                <Campo rotulo="Valor devolvido (R$)" erro={erros.caucaoValor}>
+                  <input value={caucao.valorDevolvido} onChange={(e) => setCaucao({ ...caucao, valorDevolvido: e.target.value })} inputMode="decimal" />
+                </Campo>
+              </div>
+            </>
+          )}
         </Secao>
         {erroGeral && <p className="alerta alerta--erro" role="alert">{erroGeral}</p>}
         <Rodape salvando={salvando} aoFechar={aoFechar} />
@@ -182,7 +213,13 @@ export function FormEditarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: Lo
 
 // -------------------------------------------------------- Registrar reajuste
 
-export function FormReajuste({ locacao, aoFechar, aoSalvar }: { locacao: LocacaoComInquilino; aoFechar: () => void; aoSalvar: (atualizados: number) => void }) {
+export function FormReajuste({ locacao, imovel, proprietario, aoFechar, aoSalvar }: {
+  locacao: LocacaoComInquilino
+  imovel?: Imovel
+  proprietario?: Proprietario | null
+  aoFechar: () => void
+  aoSalvar: (atualizados: number) => void
+}) {
   const hoje = hojeBrasil()
   const previsto = proximoReajuste(locacao)
   const [data, setData] = useState(previsto && previsto <= hoje ? previsto : hoje)
@@ -191,6 +228,82 @@ export function FormReajuste({ locacao, aoFechar, aoSalvar }: { locacao: Locacao
   const [indicePct, setIndicePct] = useState('')
   const [aplicar, setAplicar] = useState(false)
   const nomeIndice = INDICE_COMPLETO[locacao.indice_reajuste] ?? null
+  const automatico = INDICES_AUTOMATICOS.includes(locacao.indice_reajuste)
+  const [resultado, setResultado] = useState<ResultadoIndice | null>(null)
+  const [buscando, setBuscando] = useState(false)
+  const [avisoIndice, setAvisoIndice] = useState<string | null>(null)
+  const [gerandoCarta, setGerandoCarta] = useState(false)
+
+  /** Busca a variação acumulada do índice no Banco Central e calcula o novo valor. */
+  async function buscarIndice(dataBase = data) {
+    setBuscando(true)
+    setAvisoIndice(null)
+    try {
+      const r = await variacaoAcumulada(locacao.indice_reajuste, dataBase, locacao.reajuste_meses ?? 12)
+      if (!r) {
+        setAvisoIndice('O índice ainda não tem todos os meses publicados para esta data. Digite o percentual manualmente.')
+        return
+      }
+      setResultado(r)
+      setIndicePct(String(r.acumulado).replace('.', ','))
+      setValor(valorParaCampo(Math.round(Number(locacao.valor_aluguel) * (1 + r.acumulado / 100) * 100) / 100))
+      setObservacao(`${nomeIndice} acumulado de ${String(r.acumulado).replace('.', ',')}% (${r.periodo})`)
+    } catch {
+      setAvisoIndice('Não foi possível consultar o Banco Central agora. Digite o percentual manualmente.')
+    } finally {
+      setBuscando(false)
+    }
+  }
+
+  // Ao abrir, já busca o índice automaticamente (IPCA, IGP-M e INPC).
+  const buscouAoAbrir = useRef(false)
+  useEffect(() => {
+    if (!automatico || buscouAoAbrir.current) return
+    buscouAoAbrir.current = true
+    void Promise.resolve().then(() => buscarIndice())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /** Primeiro vencimento com o novo valor: o vencimento do mês do reajuste, ou do mês seguinte se já passou. */
+  function vigencia(): string {
+    const [a, m, d] = data.split('-').map(Number)
+    const ultimo = new Date(Date.UTC(a, m, 0)).getUTCDate()
+    const venc = `${a}-${String(m).padStart(2, '0')}-${String(Math.min(locacao.dia_vencimento, ultimo)).padStart(2, '0')}`
+    if (d <= Math.min(locacao.dia_vencimento, ultimo)) return venc
+    const prox = adicionarMeses(`${a}-${String(m).padStart(2, '0')}-01`, 1)
+    const [pa, pm] = prox.split('-').map(Number)
+    const ult2 = new Date(Date.UTC(pa, pm, 0)).getUTCDate()
+    return `${pa}-${String(pm).padStart(2, '0')}-${String(Math.min(locacao.dia_vencimento, ult2)).padStart(2, '0')}`
+  }
+
+  async function gerarCarta() {
+    const novoValor = lerValor(valor)
+    if (!novoValor || !imovel) {
+      setErros({ ...erros, valor: 'Informe o novo valor para gerar a carta.' })
+      return
+    }
+    setGerandoCarta(true)
+    try {
+      const blob = await gerarPdf(montarCartaReajuste({
+        imovel,
+        proprietario: proprietario ?? null,
+        inquilino: locacao.inquilino,
+        inicioLocacao: locacao.data_entrada,
+        indiceNome: nomeIndice,
+        periodo: resultado?.periodo ?? null,
+        percentual: indicePct ? Number(indicePct.replace(',', '.')) : ((novoValor - Number(locacao.valor_aluguel)) / Number(locacao.valor_aluguel)) * 100,
+        valorAtual: Number(locacao.valor_aluguel),
+        valorNovo: novoValor,
+        dataReajuste: data,
+        vigencia: vigencia(),
+      }))
+      await entregarArquivo(blob, nomeArquivo(`Carta de reajuste - ${locacao.inquilino.nome}.pdf`), podeCompartilharArquivos() ? 'compartilhar' : 'baixar', 'Comunicação de reajuste do aluguel')
+    } catch (err) {
+      setErroGeral(mensagemDeErro(err))
+    } finally {
+      setGerandoCarta(false)
+    }
+  }
 
   /** Calcula o novo valor a partir da variação do índice digitada (ex.: 4,68%). */
   function aplicarPercentual(texto: string) {
@@ -237,18 +350,31 @@ export function FormReajuste({ locacao, aoFechar, aoSalvar }: { locacao: Locacao
   }
 
   return (
-    <Modal titulo={`Registrar reajuste — ${locacao.inquilino.nome}`} aoFechar={aoFechar}>
+    <Modal titulo={`Reajuste do aluguel — ${locacao.inquilino.nome}`} aoFechar={aoFechar} largo>
       <form onSubmit={salvar} noValidate>
         <p className="texto-suave paragrafo">
           Valor atual: <strong>{formatarMoeda(atual)}</strong>
           {previsto && <> · reajuste previsto para <strong>{formatarData(previsto)}</strong></>}.
         </p>
         {nomeIndice ? (
-          <p className="alerta alerta--info">
-            Pelo contrato, o reajuste segue a <strong>variação acumulada do {nomeIndice}</strong> nos últimos {locacao.reajuste_meses ?? 12} meses.
-            Consulte o percentual (por exemplo, na “Calculadora do Cidadão” do Banco Central ou no site do IBGE/FGV) e digite abaixo:
-            o novo valor é calculado sozinho. Você pode ajustá-lo se combinar outro valor.
-          </p>
+          <div className="alerta alerta--info">
+            Pelo contrato, o reajuste segue a <strong>variação acumulada do {nomeIndice}</strong> em {locacao.reajuste_meses ?? 12} meses.{' '}
+            {automatico ? (
+              <>
+                {buscando && <>Buscando no Banco Central…</>}
+                {resultado && !buscando && (
+                  <>Período usado: <strong>{resultado.periodo}</strong> → <strong>{String(resultado.acumulado).replace('.', ',')}%</strong>. O novo valor já foi calculado.</>
+                )}
+                {' '}
+                <button type="button" className="botao botao--pequeno" onClick={() => buscarIndice()} disabled={buscando}>
+                  {buscando ? 'Buscando…' : resultado ? 'Buscar de novo' : 'Buscar índice'}
+                </button>
+              </>
+            ) : (
+              <>O IVAR não é publicado pelo Banco Central: consulte o percentual no site da FGV e digite abaixo.</>
+            )}
+            {avisoIndice && <div className="texto-erro" style={{ marginTop: 6 }}>{avisoIndice}</div>}
+          </div>
         ) : (
           <p className="alerta alerta--info">Pelo contrato, o novo valor é <strong>definido pelo proprietário</strong>.</p>
         )}
@@ -279,7 +405,20 @@ export function FormReajuste({ locacao, aoFechar, aoSalvar }: { locacao: Locacao
           <span>Aplicar o novo valor também aos lançamentos já gerados e <strong>sem pagamento</strong> a partir do mês do reajuste</span>
         </label>
         {erroGeral && <p className="alerta alerta--erro" role="alert">{erroGeral}</p>}
-        <Rodape salvando={salvando} aoFechar={aoFechar} rotulo="Registrar reajuste" />
+        <div className="acoes-form acoes-form--separadas">
+          {imovel ? (
+            <button type="button" className="botao botao--com-icone" onClick={gerarCarta} disabled={gerandoCarta}>
+              <IconeDocumento tamanho={15} /> {gerandoCarta ? 'Gerando…' : 'Carta de reajuste (PDF)'}
+            </button>
+          ) : <span />}
+          <div className="grupo-botoes">
+            <button type="button" className="botao" onClick={aoFechar}>Cancelar</button>
+            <button type="submit" className="botao botao--primario" disabled={salvando}>{salvando ? 'Salvando…' : 'Registrar reajuste'}</button>
+          </div>
+        </div>
+        <p className="texto-suave texto-pequeno">
+          Dica: gere e envie a <strong>carta de reajuste</strong> ao inquilino com 30 dias de antecedência e registre o reajuste na data.
+        </p>
       </form>
     </Modal>
   )

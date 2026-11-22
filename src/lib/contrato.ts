@@ -5,6 +5,7 @@ import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces'
 import { fimDoContrato, type LocacaoComInquilino } from './api'
 import { GARANTIAS, INDICE_COMPLETO, enderecoPorExtenso, numeroComExtenso, valorPorExtenso } from './documentos'
 import { MESES, formatarData, formatarMoeda } from './format'
+import { gerarPdf, nomeArquivo } from './pdf'
 import { capitalizarNome } from './texto'
 import type { Genero, Imovel, Inquilino, Proprietario } from '../types/database'
 
@@ -155,7 +156,10 @@ export function montarContrato(d: DadosContrato, op: OpcoesContrato): TDocumentD
   add(
     'DO IMÓVEL E DA DESTINAÇÃO',
     `O LOCADOR entrega em locação ao LOCATÁRIO o imóvel ${tipoLocacao} situado à ${enderecoImovel}` +
-      `${imovel.descricao ? `, composto por ${imovel.descricao.charAt(0).toLowerCase()}${imovel.descricao.slice(1).replace(/\.$/, '')}` : ''}.`,
+      `${imovel.descricao ? `, composto por ${imovel.descricao.charAt(0).toLowerCase()}${imovel.descricao.slice(1).replace(/\.$/, '')}` : ''}` +
+      `${imovel.area_m2 ? `, com área de ${String(imovel.area_m2).replace('.', ',')} m²` : ''}` +
+      `${imovel.matricula ? `, objeto da matrícula nº ${imovel.matricula}${imovel.cartorio ? ` do ${imovel.cartorio}` : ''}` : ''}` +
+      `${imovel.inscricao_iptu ? `, inscrição imobiliária (IPTU) nº ${imovel.inscricao_iptu}` : ''}.`,
     residencial
       ? 'O imóvel destina-se exclusivamente à moradia do LOCATÁRIO e de sua família, sendo vedada a alteração de finalidade ' +
         'sem autorização prévia e escrita do LOCADOR.'
@@ -245,6 +249,10 @@ export function montarContrato(d: DadosContrato, op: OpcoesContrato): TDocumentD
         'por ele, e as extraordinárias pelo LOCADOR.'
       : 'Salvo acordo escrito em contrário, o IPTU e despesas extraordinárias de propriedade serão de responsabilidade do LOCADOR. ' +
         'Se houver condomínio, as despesas ordinárias atribuídas legalmente ao LOCATÁRIO serão pagas por ele, e as extraordinárias pelo LOCADOR.',
+    imovel.valor_condominio
+      ? `A taxa de condomínio ordinária é, nesta data, de aproximadamente ${formatarMoeda(Number(imovel.valor_condominio))} ` +
+        `(${valorPorExtenso(Number(imovel.valor_condominio))}) por mês, sujeita às alterações aprovadas pelo condomínio.`
+      : null,
   )
 
   // 6. Garantia
@@ -402,15 +410,10 @@ export function montarContrato(d: DadosContrato, op: OpcoesContrato): TDocumentD
 
 /** Nome de arquivo seguro: "Contrato - Apto 101 - Maria Silva.pdf" */
 export function nomeArquivoContrato(d: DadosContrato): string {
-  const limpar = (t: string) => t.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim()
-  return `Contrato - ${limpar(d.imovel.identificacao)} - ${limpar(d.locacao.inquilino.nome)}.pdf`
+  return nomeArquivo(`Contrato - ${d.imovel.identificacao} - ${d.locacao.inquilino.nome}.pdf`)
 }
 
-/** Gera o PDF (carrega a biblioteca só quando necessário). */
+/** Gera o PDF do contrato. */
 export async function gerarPdfContrato(d: DadosContrato, op: OpcoesContrato): Promise<Blob> {
-  const [pdfMakeMod, vfsMod] = await Promise.all([import('pdfmake/build/pdfmake'), import('pdfmake/build/vfs_fonts')])
-  const pdfMake = (pdfMakeMod as unknown as { default?: typeof pdfMakeMod }).default ?? pdfMakeMod
-  const vfs = (vfsMod as unknown as { default?: Record<string, string> }).default ?? (vfsMod as unknown as Record<string, string>)
-  pdfMake.addVirtualFileSystem(vfs)
-  return pdfMake.createPdf(montarContrato(d, op)).getBlob()
+  return gerarPdf(montarContrato(d, op))
 }

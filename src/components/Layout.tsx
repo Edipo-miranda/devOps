@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { listarAvisos } from '../lib/api'
 import { aoAlterarDados } from '../lib/eventos'
 import { useCarregar } from '../lib/useCarregar'
-import { IconeCarteira, IconeEngrenagem, IconeEscudo, IconePainel, IconePessoas, IconePredio, IconeSair, IconeSino } from './Icones'
+import { IconeCarteira, IconeEngrenagem, IconeGrafico, IconeEscudo, IconePainel, IconePessoas, IconePredio, IconeSair, IconeSino } from './Icones'
 
 interface ItemMenu {
   para: string
@@ -18,7 +18,8 @@ const MENU: ItemMenu[] = [
   { para: '/', rotulo: 'Dashboard', curto: 'Início', icone: <IconePainel />, exato: true },
   { para: '/imoveis', rotulo: 'Imóveis e inquilinos', curto: 'Imóveis', icone: <IconePredio /> },
   { para: '/proprietarios', rotulo: 'Proprietários', curto: 'Donos', icone: <IconePessoas /> },
-  { para: '/recebimentos', rotulo: 'Recebimentos', curto: 'Recebimentos', icone: <IconeCarteira /> },
+  { para: '/recebimentos', rotulo: 'Recebimentos', curto: 'Aluguéis', icone: <IconeCarteira /> },
+  { para: '/relatorios', rotulo: 'Relatórios e IR', curto: 'Relatórios', icone: <IconeGrafico /> },
   { para: '/avisos', rotulo: 'Avisos', curto: 'Avisos', icone: <IconeSino /> },
 ]
 

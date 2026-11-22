@@ -75,3 +75,6 @@ export const IconeOlho = (p: P) => (
 export const IconeOlhoFechado = (p: P) => (
   <Icone {...p}><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19M6.61 6.61A13.53 13.53 0 0 0 2 12s3.5 8 10 8a9.74 9.74 0 0 0 5.39-1.61" /><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24M2 2l20 20" /></Icone>
 )
+export const IconeGrafico = (p: P) => (
+  <Icone {...p}><path d="M3 3v18h18" /><path d="M7 15v3M11 11v7M15 13v5M19 8v10" /></Icone>
+)

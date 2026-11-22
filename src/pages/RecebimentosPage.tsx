@@ -7,6 +7,9 @@ import { garantirMesAtual, gerarRecebimentosMes, listarRecebimentos, type Filtro
 import { mensagemDeErro } from '../lib/erros'
 import { MESES, formatarMoeda, mesAtualBrasil } from '../lib/format'
 import { useCarregar } from '../lib/useCarregar'
+import { exportarExcel, exportarPdf, type Coluna } from '../lib/exportar'
+import { nomeArquivo } from '../lib/pdf'
+import type { RecebimentoDetalhado } from '../types/database'
 
 const SITUACOES = [
   { valor: '', rotulo: 'Todas as situações' },
@@ -15,6 +18,20 @@ const SITUACOES = [
   { valor: 'atrasado', rotulo: 'Atrasado' },
   { valor: 'pago', rotulo: 'Pago' },
 ] as const
+
+const ROTULOS_SITUACAO: Record<string, string> = { pago: 'Pago', em_aberto: 'Em aberto', atrasado: 'Atrasado' }
+
+const COLUNAS_LISTA: Coluna<RecebimentoDetalhado>[] = [
+  { titulo: 'Inquilino', valor: (r) => r.inquilino_nome },
+  { titulo: 'Imóvel', valor: (r) => r.imovel_identificacao },
+  { titulo: 'Referência', valor: (r) => r.mes_referencia.slice(0, 7).split('-').reverse().join('/'), largura: 11 },
+  { titulo: 'Vencimento', valor: (r) => r.data_vencimento, tipo: 'data' },
+  { titulo: 'Situação', valor: (r) => ROTULOS_SITUACAO[r.situacao], largura: 11 },
+  { titulo: 'Previsto', valor: (r) => Number(r.valor_previsto), tipo: 'moeda' },
+  { titulo: 'Pagamento', valor: (r) => r.data_pagamento, tipo: 'data' },
+  { titulo: 'Multa/juros', valor: (r) => (r.valor_encargos ? Number(r.valor_encargos) : null), tipo: 'moeda' },
+  { titulo: 'Recebido', valor: (r) => (r.valor_recebido !== null ? Number(r.valor_recebido) : null), tipo: 'moeda' },
+]
 
 /** Remove acentos e deixa minúsculo, para a busca ignorar "é", "ç" etc. */
 const normalizar = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -67,6 +84,30 @@ export function RecebimentosPage() {
     [linhas],
   )
 
+  const [exportando, setExportando] = useState<'excel' | 'pdf' | null>(null)
+
+  /** Exporta a lista exatamente como está filtrada na tela. */
+  async function exportar(tipo: 'excel' | 'pdf') {
+    setExportando(tipo)
+    try {
+      const nome = nomeArquivo(`Recebimentos ${todoHistorico ? 'historico completo' : mes ? `${String(mes).padStart(2, '0')}-${ano}` : ano}`)
+      if (tipo === 'excel') {
+        await exportarExcel(nome, [{ nome: 'Recebimentos', colunas: COLUNAS_LISTA, linhas }])
+      } else {
+        await exportarPdf(nome, 'Recebimentos de aluguel', `Período: ${periodo} · ${linhas.length} lançamento(s)`, [{
+          titulo: 'Lançamentos',
+          colunas: COLUNAS_LISTA,
+          linhas,
+          totais: ['', '', '', '', 'Total', totais.previsto, '', '', totais.recebido],
+        }])
+      }
+    } catch (err) {
+      setAviso({ tipo: 'erro', texto: mensagemDeErro(err) })
+    } finally {
+      setExportando(null)
+    }
+  }
+
   async function gerar() {
     if (!mes) return
     setGerando(true)
@@ -95,11 +136,19 @@ export function RecebimentosPage() {
           <h1>Recebimentos</h1>
           <p className="texto-suave">Lançamentos de {periodo}.</p>
         </div>
+        <div className="grupo-botoes">
+        <button className="botao botao--discreto" onClick={() => exportar('excel')} disabled={!dados || exportando !== null}>
+          {exportando === 'excel' ? 'Gerando…' : 'Excel'}
+        </button>
+        <button className="botao botao--discreto" onClick={() => exportar('pdf')} disabled={!dados || exportando !== null}>
+          {exportando === 'pdf' ? 'Gerando…' : 'PDF'}
+        </button>
         {!todoHistorico && mes && (
           <button className="botao" onClick={gerar} disabled={gerando} title="Cria os lançamentos que faltam, sem duplicar">
             {gerando ? 'Gerando…' : `Gerar lançamentos de ${MESES[mes - 1]}`}
           </button>
         )}
+        </div>
       </div>
 
       <div className="barra-filtros">

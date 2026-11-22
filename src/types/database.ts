@@ -39,6 +39,17 @@ export interface Imovel extends Endereco {
   tipo: string | null
   descricao: string | null
   proprietario_id: string | null
+  matricula: string | null
+  cartorio: string | null
+  inscricao_iptu: string | null
+  valor_iptu_anual: number | null
+  area_m2: number | null
+  quartos: number | null
+  banheiros: number | null
+  vagas: number | null
+  valor_condominio: number | null
+  uc_energia: string | null // nº da unidade consumidora de energia
+  uc_agua: string | null
   vendido_em: string | null // preenchido quando o imóvel foi vendido
   valor_venda: number | null
   comprador: string | null
@@ -93,7 +104,14 @@ export interface CondicoesContrato {
   iptu_por_conta: 'locador' | 'locatario'
 }
 
-export interface Locacao extends CondicoesContrato {
+/** Controle da caução em dinheiro (fica na locação). */
+export interface ControleCaucao {
+  caucao_recebida_em: string | null
+  caucao_devolvida_em: string | null
+  caucao_valor_devolvido: number | null
+}
+
+export interface Locacao extends CondicoesContrato, ControleCaucao {
   id: string
   owner_id: string
   imovel_id: string
@@ -140,6 +158,22 @@ export interface Aviso {
 export interface Configuracoes {
   dias_aviso_parcela: number
   dias_aviso_contrato: number
+  cobrar_encargos: boolean // calcular multa e juros nos atrasos
+}
+
+export type CategoriaDespesa =
+  | 'iptu' | 'condominio' | 'manutencao' | 'reforma' | 'taxa_administracao' | 'seguro' | 'contas_consumo' | 'impostos_taxas' | 'outros'
+
+export interface Despesa {
+  id: string
+  owner_id: string
+  imovel_id: string
+  data: string
+  categoria: CategoriaDespesa
+  descricao: string | null
+  valor: number
+  dedutivel: boolean
+  created_at: string
 }
 
 export interface Recebimento {
@@ -151,6 +185,7 @@ export interface Recebimento {
   data_vencimento: string
   valor_recebido: number | null
   data_pagamento: string | null
+  valor_encargos: number | null // parte do valor recebido que foi multa/juros
   observacao: string | null
   created_at: string
   updated_at: string
@@ -166,6 +201,15 @@ export interface RecebimentoDetalhado extends Recebimento {
   inquilino_id: string
   inquilino_nome: string
   inquilino_telefone: string | null
+  inquilino_cpf: string | null
+  multa_atraso_percentual: number | null
+  juros_atraso_percentual: number | null
+  proprietario_id: string | null
+  proprietario_nome: string | null
+  proprietario_cpf_cnpj: string | null
+  proprietario_pix: string | null
+  imovel_cidade: string | null
+  imovel_uf: string | null
 }
 
 /** Retorno da função resumo_mes (dashboard). */

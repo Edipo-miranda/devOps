@@ -4,7 +4,8 @@ import { Aviso, type AvisoDados } from '../components/Aviso'
 import { GerarContrato } from '../components/GerarContrato'
 import { ExcluirImovel, FormVendaImovel } from '../components/FormsImovelVenda'
 import { IconeDocumento } from '../components/Icones'
-import { GARANTIAS, formatarEndereco } from '../lib/documentos'
+import { GARANTIAS, INDICE_COMPLETO, formatarEndereco } from '../lib/documentos'
+import { DespesasImovel } from '../components/Despesas'
 import { FormImovel } from '../components/FormImovel'
 import {
   FormEditarInquilino,
@@ -188,7 +189,7 @@ export function ImovelDetalhePage() {
               <h3>Contrato e reajuste</h3>
               <div className="grupo-botoes">
                 {ativa.reajuste_meses && (
-                  <button className="botao botao--pequeno" onClick={() => setJanela({ tipo: 'reajuste', locacao: ativa })}>Registrar reajuste</button>
+                  <button className="botao botao--pequeno" onClick={() => setJanela({ tipo: 'reajuste', locacao: ativa })}>Calcular reajuste</button>
                 )}
                 {ativa.prazo_meses && (
                   <button className="botao botao--pequeno" onClick={() => setJanela({ tipo: 'renovar', locacao: ativa })}>Renovar contrato</button>
@@ -202,13 +203,20 @@ export function ImovelDetalhePage() {
                 <dt>Fim do contrato</dt>
                 <dd className={fim && fim <= hoje ? 'texto-erro' : ''}>{fim ? `${formatarData(fim)} (${prazoRelativo(fim)})` : '—'}</dd>
               </div>
-              <div><dt>Reajuste</dt><dd>{ativa.reajuste_meses ? `A cada ${ativa.reajuste_meses} meses` : 'Sem reajuste'}</dd></div>
+              <div><dt>Reajuste</dt><dd>{ativa.reajuste_meses ? `A cada ${ativa.reajuste_meses} meses · ${INDICE_COMPLETO[ativa.indice_reajuste] ?? 'valor do proprietário'}` : 'Sem reajuste'}</dd></div>
               <div><dt>Último reajuste</dt><dd>{formatarData(ativa.data_ultimo_reajuste)}</dd></div>
               <div>
                 <dt>Próximo reajuste</dt>
                 <dd className={reajusteEm && reajusteEm <= hoje ? 'texto-erro' : ''}>{reajusteEm ? `${formatarData(reajusteEm)} (${prazoRelativo(reajusteEm)})` : '—'}</dd>
               </div>
             </dl>
+            {ativa.garantia === 'caucao' && (
+              <p className="texto-suave texto-pequeno">
+                Caução: {ativa.valor_garantia ? formatarMoeda(ativa.valor_garantia) : 'valor não informado'}
+                {ativa.caucao_recebida_em ? ` · recebida em ${formatarData(ativa.caucao_recebida_em)}` : ' · recebimento não registrado'}
+                {ativa.caucao_devolvida_em ? ` · devolvida em ${formatarData(ativa.caucao_devolvida_em)}${ativa.caucao_valor_devolvido ? ` (${formatarMoeda(ativa.caucao_valor_devolvido)})` : ''}` : ''}
+              </p>
+            )}
             {!ativa.prazo_meses && !ativa.reajuste_meses && (
               <p className="texto-suave texto-pequeno">
                 Para receber avisos de fim de contrato e de reajuste, informe o prazo e a periodicidade em “Editar locação”.
@@ -221,6 +229,35 @@ export function ImovelDetalhePage() {
           </p>
         )}
       </div>
+
+      {(imovel.matricula || imovel.inscricao_iptu || imovel.area_m2 || imovel.quartos !== null || imovel.valor_condominio || imovel.uc_energia) && (
+        <div className="cartao cartao--compacto">
+          <h3 className="paragrafo">Documentação e características</h3>
+          <dl className="dados-grade dados-grade--4">
+            {imovel.matricula && <div><dt>Matrícula</dt><dd>{imovel.matricula}{imovel.cartorio ? ` · ${imovel.cartorio}` : ''}</dd></div>}
+            {imovel.inscricao_iptu && <div><dt>Inscrição IPTU</dt><dd>{imovel.inscricao_iptu}</dd></div>}
+            {imovel.valor_iptu_anual ? <div><dt>IPTU anual</dt><dd>{formatarMoeda(imovel.valor_iptu_anual)}</dd></div> : null}
+            {imovel.valor_condominio ? <div><dt>Condomínio</dt><dd>{formatarMoeda(imovel.valor_condominio)}/mês</dd></div> : null}
+            {imovel.area_m2 ? <div><dt>Área</dt><dd>{String(imovel.area_m2).replace('.', ',')} m²</dd></div> : null}
+            {(imovel.quartos !== null || imovel.banheiros !== null || imovel.vagas !== null) && (
+              <div><dt>Cômodos</dt><dd>{[
+                imovel.quartos !== null ? `${imovel.quartos} quarto(s)` : null,
+                imovel.banheiros !== null ? `${imovel.banheiros} banheiro(s)` : null,
+                imovel.vagas !== null ? `${imovel.vagas} vaga(s)` : null,
+              ].filter(Boolean).join(' · ')}</dd></div>
+            )}
+            {imovel.uc_energia && <div><dt>Conta de energia</dt><dd>{imovel.uc_energia}</dd></div>}
+            {imovel.uc_agua && <div><dt>Conta de água</dt><dd>{imovel.uc_agua}</dd></div>}
+          </dl>
+        </div>
+      )}
+
+      <DespesasImovel
+        imovelId={imovel.id}
+        recebimentos={recebimentos}
+        aoAlterar={(texto) => setAviso({ tipo: 'ok', texto })}
+        aoErro={(texto) => setAviso({ tipo: 'erro', texto })}
+      />
 
       <h2 className="titulo-secao">Histórico de ocupações</h2>
       {anteriores.length === 0 ? (
@@ -312,6 +349,8 @@ export function ImovelDetalhePage() {
       {janelaAberta?.tipo === 'reajuste' && (
         <FormReajuste
           locacao={janelaAberta.locacao}
+          imovel={imovel}
+          proprietario={proprietario}
           aoFechar={() => fecharJanela()}
           aoSalvar={(n) => concluido(n > 0 ? `Reajuste registrado. ${n} lançamento(s) em aberto atualizado(s).` : 'Reajuste registrado.')}
         />

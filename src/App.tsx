@@ -12,6 +12,7 @@ import { ImovelDetalhePage } from './pages/ImovelDetalhePage'
 import { RecebimentosPage } from './pages/RecebimentosPage'
 import { AvisosPage } from './pages/AvisosPage'
 import { ProprietariosPage } from './pages/ProprietariosPage'
+import { RelatoriosPage } from './pages/RelatoriosPage'
 import { ConfiguracoesPage } from './pages/ConfiguracoesPage'
 
 export default function App() {
@@ -40,6 +41,7 @@ export default function App() {
             <Route path="recebimentos" element={<RecebimentosPage />} />
             <Route path="avisos" element={<AvisosPage />} />
             <Route path="proprietarios" element={<ProprietariosPage />} />
+            <Route path="relatorios" element={<RelatoriosPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
             <Route path="verificacao" element={<VerificacaoPage />} />
           </Route>

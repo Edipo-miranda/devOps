@@ -39,6 +39,7 @@ export function ConfiguracoesPage() {
 function FormConfiguracoes({ inicial }: { inicial: Configuracoes }) {
   const [parcela, setParcela] = useState(String(inicial.dias_aviso_parcela))
   const [contrato, setContrato] = useState(String(inicial.dias_aviso_contrato))
+  const [cobrar, setCobrar] = useState(inicial.cobrar_encargos)
   const [erros, setErros] = useState<Record<string, string>>({})
   const [mensagem, setMensagem] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null)
   const [salvando, setSalvando] = useState(false)
@@ -55,7 +56,7 @@ function FormConfiguracoes({ inicial }: { inicial: Configuracoes }) {
     if (Object.keys(novos).length) return
     setSalvando(true)
     try {
-      await salvarConfiguracoes({ dias_aviso_parcela: p, dias_aviso_contrato: c })
+      await salvarConfiguracoes({ dias_aviso_parcela: p, dias_aviso_contrato: c, cobrar_encargos: cobrar })
       setMensagem({ tipo: 'ok', texto: 'Configurações salvas.' })
     } catch (err) {
       setMensagem({ tipo: 'erro', texto: mensagemDeErro(err) })
@@ -73,6 +74,14 @@ function FormConfiguracoes({ inicial }: { inicial: Configuracoes }) {
       <Campo rotulo="Avisar fim de contrato e reajuste quantos dias antes?" dica={`padrão ${CONFIG_PADRAO.dias_aviso_contrato}`} erro={erros.contrato}>
         <input type="number" min={0} max={365} value={contrato} onChange={(e) => setContrato(e.target.value)} />
       </Campo>
+      <p className="subtitulo-form">Atrasos</p>
+      <label className="checagem paragrafo">
+        <input type="checkbox" checked={cobrar} onChange={(e) => setCobrar(e.target.checked)} />
+        <span>
+          <strong>Calcular multa e juros nos atrasos</strong>, proporcionais aos dias de atraso, conforme os percentuais de cada contrato.
+          Ao registrar um pagamento atrasado, você ainda pode escolher não cobrar naquele caso.
+        </span>
+      </label>
       {mensagem && <p className={`alerta alerta--${mensagem.tipo}`} role="status">{mensagem.texto}</p>}
       <div className="acoes-form">
         <button type="submit" className="botao botao--primario" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</button>
