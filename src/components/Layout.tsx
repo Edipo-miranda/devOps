@@ -31,11 +31,12 @@ export function Layout() {
   const { sessao, sair } = useAuth()
   const { pathname } = useLocation()
   // Recarrega os avisos ao trocar de tela e sempre que algo for gravado no banco.
-  const { dados: avisos, recarregar } = useCarregar(listarAvisos, [pathname])
+  const { dados, recarregar } = useCarregar(listarAvisos, [pathname])
+  const avisos = Array.isArray(dados) ? dados : []
   useEffect(() => aoAlterarDados(recarregar), [recarregar])
 
-  const total = avisos?.length ?? 0
-  const urgente = (avisos ?? []).some((a) => a.tipo === 'parcela_atrasada' || a.dias <= 0)
+  const total = avisos.length
+  const urgente = avisos.some((a) => a.tipo === 'parcela_atrasada' || a.dias <= 0)
   const email = sessao?.user.email ?? ''
 
   return (
