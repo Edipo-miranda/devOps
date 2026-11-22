@@ -524,6 +524,15 @@ a.botao { text-decoration: none; display: inline-block; }
 .escolher-arquivo:hover { border-color: var(--primaria); }
 .escolher-arquivo--ok { border-style: solid; border-color: var(--primaria); background: var(--ok-fundo); }
 
+/* Espaço usado */
+.uso { margin-bottom: 14px; }
+.uso__topo { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 0.85rem; margin-bottom: 6px; }
+.uso__topo > span { font-weight: 600; color: var(--texto-suave); }
+.uso__trilho { height: 10px; border-radius: 999px; background: #e9eef3; overflow: hidden; }
+.uso__barra { display: block; height: 100%; border-radius: 999px; background: var(--gradiente); }
+.uso__barra--alerta { background: var(--alerta); }
+.uso__barra--critico { background: var(--erro); }
+
 /* WhatsApp */
 .botao--whatsapp {
   display: inline-flex !important; align-items: center; gap: 6px;

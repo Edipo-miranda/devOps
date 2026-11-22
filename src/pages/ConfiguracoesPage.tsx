@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { Campo } from '../components/CamposLocacao'
 import { FormNovaSenha } from '../components/FormNovaSenha'
 import { useAuth } from '../auth/AuthProvider'
-import { CONFIG_PADRAO, lerConfiguracoes, salvarConfiguracoes } from '../lib/api'
+import { CONFIG_PADRAO, lerConfiguracoes, salvarConfiguracoes, usoArmazenamento } from '../lib/api'
+import { tamanhoLegivel } from '../lib/imagem'
 import { mensagemDeErro } from '../lib/erros'
 import { useCarregar } from '../lib/useCarregar'
 import type { Configuracoes } from '../types/database'
@@ -23,6 +24,9 @@ export function ConfiguracoesPage() {
       </div>
       {erro && <p className="alerta alerta--erro">{erro}</p>}
       {dados && <FormConfiguracoes inicial={dados} />}
+
+      <h2 className="titulo-secao">Espaço para documentos</h2>
+      <Armazenamento />
 
       <h2 className="titulo-secao">Minha conta</h2>
       <div className="cartao cartao--estreito">
@@ -87,5 +91,39 @@ function FormConfiguracoes({ inicial }: { inicial: Configuracoes }) {
         <button type="submit" className="botao botao--primario" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</button>
       </div>
     </form>
+  )
+}
+
+const LIMITE_GRATUITO = 1024 * 1024 * 1024 // 1 GB no plano gratuito do Supabase (para o projeto todo)
+
+function BarraUso({ rotulo, bytes, arquivos }: { rotulo: string; bytes: number; arquivos: number }) {
+  const pct = Math.min(100, (bytes / LIMITE_GRATUITO) * 100)
+  const classe = pct >= 90 ? 'uso__barra--critico' : pct >= 70 ? 'uso__barra--alerta' : ''
+  return (
+    <div className="uso">
+      <div className="uso__topo">
+        <span>{rotulo}</span>
+        <strong>{tamanhoLegivel(bytes)} <span className="texto-suave">de 1 GB · {arquivos} arquivo(s)</span></strong>
+      </div>
+      <div className="uso__trilho"><span className={`uso__barra ${classe}`} style={{ width: `${Math.max(pct, bytes > 0 ? 1 : 0)}%` }} /></div>
+    </div>
+  )
+}
+
+/** Espaço ocupado pelos documentos anexados (o limite gratuito é do sistema inteiro). */
+function Armazenamento() {
+  const { dados, erro } = useCarregar(usoArmazenamento, [])
+  if (erro) return <p className="alerta alerta--erro">{erro}</p>
+  if (!dados) return <p className="texto-suave">Carregando…</p>
+  const pctTotal = (dados.total_bytes / LIMITE_GRATUITO) * 100
+  return (
+    <div className="cartao cartao--estreito">
+      <BarraUso rotulo="Seus documentos" bytes={dados.meus_bytes} arquivos={dados.meus_arquivos} />
+      <BarraUso rotulo="Sistema inteiro (todos os usuários)" bytes={dados.total_bytes} arquivos={dados.total_arquivos} />
+      <p className="texto-suave texto-pequeno">
+        O plano gratuito do Supabase tem 1 GB para todos os usuários juntos. As fotos são reduzidas automaticamente ao anexar.
+        {pctTotal >= 80 && <> <strong className="texto-erro">O espaço está acabando:</strong> exclua documentos antigos ou passe para o plano Pro (100 GB).</>}
+      </p>
+    </div>
   )
 }

@@ -674,3 +674,19 @@ export async function apagarArquivosDocumentos(filtro: { imovelId?: string; loca
   const caminhos = (data ?? []).map((d) => d.caminho as string)
   if (caminhos.length) await supabase.storage.from(PASTA).remove(caminhos)
 }
+
+export interface UsoArmazenamento {
+  meus_bytes: number
+  meus_arquivos: number
+  total_bytes: number
+  total_arquivos: number
+}
+
+/** Espaço ocupado pelos documentos: do usuário e do sistema inteiro (limite gratuito: 1 GB no total). */
+export async function usoArmazenamento(): Promise<UsoArmazenamento> {
+  const { data, error } = await supabase.rpc('uso_armazenamento')
+  if (error) throw error
+  const l = Array.isArray(data) ? (data[0] as UsoArmazenamento | undefined) : undefined
+  if (!l) return { meus_bytes: 0, meus_arquivos: 0, total_bytes: 0, total_arquivos: 0 }
+  return { meus_bytes: Number(l.meus_bytes), meus_arquivos: Number(l.meus_arquivos), total_bytes: Number(l.total_bytes), total_arquivos: Number(l.total_arquivos) }
+}

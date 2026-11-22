@@ -24,6 +24,7 @@ Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e i
 │   ├── migrations/0006_venda_exclusao_imovel.sql ← imóvel vendido e exclusão de imóvel
 │   ├── migrations/0007_financeiro_documentos.sql ← despesas, multa/juros, matrícula/IPTU, caução
 │   ├── migrations/0008_documentos_modelos.sql ← documentos anexados e modelos de contrato
+│   ├── migrations/0009_uso_armazenamento.sql ← espaço usado pelos documentos
 │   ├── tests/0001_verificar_banco.sql       ← testa o banco e apaga tudo que criou
 │   ├── tests/0002_verificar_funcoes_cadastro.sql
 │   ├── tests/0003_verificar_contratos_avisos.sql
@@ -31,7 +32,8 @@ Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e i
 │   ├── tests/0005_verificar_contrato_exclusao.sql
 │   ├── tests/0006_verificar_venda_exclusao_imovel.sql
 │   ├── tests/0007_verificar_financeiro.sql
-│   └── tests/0008_verificar_documentos_modelos.sql
+│   ├── tests/0008_verificar_documentos_modelos.sql
+│   └── tests/0009_verificar_uso_armazenamento.sql
 ├── src/
 │   ├── lib/supabase.ts       ← conexão com o Supabase (só chave pública)
 │   ├── lib/erros.ts          ← traduz erros para mensagens em português
@@ -318,6 +320,15 @@ Assinatura: no papel (imprimir e rubricar cada página) ou, de graça pela inter
 4. **Editar o contrato**: Gerar contrato → **Editar texto / cláusulas** (alterar, incluir, remover e reordenar
    cláusulas). **Salvar nesta locação** guarda a versão para aquele inquilino; **Salvar como modelo** cria um
    contrato próprio reaproveitável (os dados viram campos como `{{LOCATARIO_NOME}}`).
+
+## Espaço usado e fotos reduzidas (script 0009)
+
+1. Supabase → **SQL Editor**: rode `supabase/migrations/0009_uso_armazenamento.sql` → *Success*.
+2. Rode `supabase/tests/0009_verificar_uso_armazenamento.sql` → **2 linhas OK**.
+3. **Configurações → Espaço para documentos** mostra quanto *você* usa e quanto o *sistema inteiro* usa,
+   comparado com o 1 GB do plano gratuito (o limite é do projeto Supabase, somado entre todos os usuários).
+4. Fotos anexadas são **reduzidas automaticamente** (até 1920 px, JPEG) antes de enviar — ex.: 11,6 MB → 469 KB.
+   PDFs e Word são enviados como estão.
 
 ## Dar acesso a outra pessoa
 

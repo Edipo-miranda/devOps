@@ -7,6 +7,7 @@ import { mensagemDeErro } from '../lib/erros'
 import { formatarData } from '../lib/format'
 import { primeiraMaiuscula } from '../lib/texto'
 import { useCarregar } from '../lib/useCarregar'
+import { reduzirImagem, tamanhoLegivel } from '../lib/imagem'
 import type { Documento, TipoDocumento } from '../types/database'
 
 const TIPOS: Record<TipoDocumento, string> = {
@@ -21,8 +22,6 @@ const TIPOS: Record<TipoDocumento, string> = {
 const TAMANHO_MAXIMO = 20 * 1024 * 1024 // 20 MB
 const ACEITOS = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.doc,.docx,application/pdf,image/*'
 
-const tamanhoLegivel = (b: number | null) =>
-  !b ? '' : b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
 
 /** Documentos guardados do imóvel (contrato assinado, vistoria, documentos pessoais…). */
 export function DocumentosImovel({ imovelId, locacoes, aoAlterar, aoErro }: {
@@ -125,16 +124,28 @@ function FormDocumento({ imovelId, locacoes, aoFechar, aoSalvar }: {
   const [observacao, setObservacao] = useState('')
   const [erro, setErro] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
+  const [preparando, setPreparando] = useState(false)
+  const [reducao, setReducao] = useState<string | null>(null)
   const entrada = useRef<HTMLInputElement>(null)
 
-  function escolher(f: File | null) {
+  /** Fotos são reduzidas antes de enviar (economiza o espaço do plano gratuito). */
+  async function escolher(f: File | null) {
     setErro(null)
-    if (f && f.size > TAMANHO_MAXIMO) {
-      setErro('O arquivo passa de 20 MB. Diminua a resolução da foto ou compacte o PDF.')
+    setReducao(null)
+    if (!f) return
+    setPreparando(true)
+    const r = await reduzirImagem(f)
+    setPreparando(false)
+    if (r.arquivo.size > TAMANHO_MAXIMO) {
+      setErro('O arquivo passa de 20 MB. Compacte o PDF ou envie uma foto menor.')
       return
     }
-    setArquivo(f)
-    if (f && !nome) setNome(f.name.replace(/\.[^.]+$/, ''))
+    if (r.reduzido) {
+      const economia = Math.round((1 - r.arquivo.size / r.tamanhoOriginal) * 100)
+      setReducao(`Foto reduzida de ${tamanhoLegivel(r.tamanhoOriginal)} para ${tamanhoLegivel(r.arquivo.size)} (${economia}% menor), sem perder a leitura.`)
+    }
+    setArquivo(r.arquivo)
+    if (!nome) setNome(f.name.replace(/\.[^.]+$/, ''))
   }
 
   async function salvar(e: FormEvent) {
@@ -166,12 +177,15 @@ function FormDocumento({ imovelId, locacoes, aoFechar, aoSalvar }: {
       <form onSubmit={salvar} noValidate>
         <div className={`escolher-arquivo ${arquivo ? 'escolher-arquivo--ok' : ''}`} onClick={() => entrada.current?.click()}>
           <input ref={entrada} type="file" accept={ACEITOS} hidden onChange={(e) => escolher(e.target.files?.[0] ?? null)} />
-          {arquivo ? (
+          {preparando ? (
+            <><strong>Preparando o arquivo…</strong><span className="texto-suave texto-pequeno">reduzindo a foto</span></>
+          ) : arquivo ? (
             <><strong>{arquivo.name}</strong><span className="texto-suave texto-pequeno">{tamanhoLegivel(arquivo.size)} · clique para trocar</span></>
           ) : (
             <><strong>Clique para escolher o arquivo</strong><span className="texto-suave texto-pequeno">PDF, foto (JPG/PNG) ou Word, até 20 MB. No celular, dá para tirar foto.</span></>
           )}
         </div>
+        {reducao && <p className="alerta alerta--ok">{reducao}</p>}
         <div className="grade-2">
           <Campo rotulo="Tipo">
             <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoDocumento)}>
@@ -196,7 +210,7 @@ function FormDocumento({ imovelId, locacoes, aoFechar, aoSalvar }: {
         {erro && <p className="alerta alerta--erro" role="alert">{erro}</p>}
         <div className="acoes-form">
           <button type="button" className="botao" onClick={aoFechar}>Cancelar</button>
-          <button type="submit" className="botao botao--primario" disabled={salvando}>{salvando ? 'Enviando…' : 'Guardar documento'}</button>
+          <button type="submit" className="botao botao--primario" disabled={salvando || preparando}>{salvando ? 'Enviando…' : 'Guardar documento'}</button>
         </div>
       </form>
     </Modal>

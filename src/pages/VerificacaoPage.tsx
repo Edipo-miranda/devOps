@@ -114,6 +114,14 @@ export function VerificacaoPage() {
         : { nome: 'Documentos e modelos de contrato (script 0008)', estado: 'ok' },
     )
 
+    // Espaço usado (0009). Só leitura.
+    const { error: erroUso } = await supabase.rpc('uso_armazenamento')
+    resultados.push(
+      erroUso
+        ? { nome: 'Espaço usado pelos documentos (script 0009)', estado: 'erro', detalhe: mensagemDeErro(erroUso) }
+        : { nome: 'Espaço usado pelos documentos (script 0009)', estado: 'ok' },
+    )
+
     return resultados
   }, [])
 
