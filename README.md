@@ -16,6 +16,7 @@ Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e i
 
 ```
 ├── supabase/
+│   ├── instalar_tudo.sql ← todos os scripts juntos (cliente novo; gerado por npm run sql:juntar)
 │   ├── migrations/0001_schema_inicial.sql   ← cria tabelas, regras, segurança e funções
 │   ├── migrations/0002_funcoes_cadastro.sql ← cadastro "tudo ou nada" e encerramento de locação
 │   ├── migrations/0003_contratos_avisos.sql ← prazo de contrato, reajustes e avisos
@@ -329,6 +330,26 @@ Assinatura: no papel (imprimir e rubricar cada página) ou, de graça pela inter
    comparado com o 1 GB do plano gratuito (o limite é do projeto Supabase, somado entre todos os usuários).
 4. Fotos anexadas são **reduzidas automaticamente** (até 1920 px, JPEG) antes de enviar — ex.: 11,6 MB → 469 KB.
    PDFs e Word são enviados como estão.
+
+## Instalar para um cliente novo (Supabase só dele)
+
+Para um projeto Supabase **novo e vazio** não é preciso rodar os scripts um por um:
+
+1. **Supabase**: crie a conta (de preferência no e-mail do cliente — o plano gratuito permite só 2 projetos por conta)
+   → **New project** (região *South America (São Paulo)*) → anote a senha do banco.
+2. **SQL Editor → New query**: cole todo o arquivo `supabase/instalar_tudo.sql` → **Run** → *Success*.
+3. **Authentication → Sign In / Providers**: desligue **Allow new users to sign up**.
+4. **Authentication → Users → Add user**: e-mail do cliente, senha provisória, **Auto Confirm User**; depois rode o
+   comando de "trocar senha" da seção *Dar acesso a outra pessoa*.
+5. **Project Settings → API Keys** (ou **Data API**): copie a **Project URL** e a chave **publishable / anon**
+   (nunca a *secret* / *service_role*).
+6. **Vercel → Add New → Project** → importe o mesmo repositório do GitHub → em **Environment Variables** coloque
+   `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` do projeto do cliente → **Deploy**.
+7. **Supabase → Authentication → URL Configuration**: em **Site URL**, o endereço novo da Vercel.
+8. Abra o site, entre com o usuário do cliente e confira **Verificar conexão** (tudo OK).
+
+Quando houver um script novo (0010…), rode-o também no Supabase de cada cliente e gere o arquivo único de novo
+com `npm run sql:juntar`. O código do site é o mesmo: um *push* no GitHub atualiza todos os sites na Vercel.
 
 ## Dar acesso a outra pessoa
 
