@@ -22,6 +22,7 @@ const ANO_ATUAL = Number(hojeBrasil().slice(0, 4))
 export function RelatoriosPage() {
   const [ano, setAno] = useState(ANO_ATUAL)
   const [proprietarioId, setProprietarioId] = useState('')
+  const [inquilinoId, setInquilinoId] = useState('')
   const [gerando, setGerando] = useState<string | null>(null)
   const [erroAcao, setErroAcao] = useState<string | null>(null)
 
@@ -32,20 +33,36 @@ export function RelatoriosPage() {
     return { recebimentos, despesas, imoveis, proprietarios }
   }, [ano])
 
+  const doDono = useMemo(() => {
+    const ids = new Set(dados?.imoveis.filter((i) => i.proprietario_id === proprietarioId).map((i) => i.id))
+    return (imovelId: string) => !proprietarioId || ids.has(imovelId)
+  }, [dados, proprietarioId])
+
+  // Inquilinos que pagaram algo no ano (dentro do proprietário escolhido).
+  const inquilinos = useMemo(() => {
+    const m = new Map<string, { id: string; nome: string; cpf: string | null }>()
+    for (const r of dados?.recebimentos ?? []) {
+      if (doDono(r.imovel_id) && !m.has(r.inquilino_id)) m.set(r.inquilino_id, { id: r.inquilino_id, nome: r.inquilino_nome, cpf: r.inquilino_cpf })
+    }
+    return [...m.values()].sort((a, b) => a.nome.localeCompare(b.nome))
+  }, [dados, doDono])
+  const inquilino = inquilinos.find((q) => q.id === inquilinoId)
+
   const rel = useMemo(() => {
     if (!dados) return null
-    const doDono = (imovelId: string) => !proprietarioId || dados.imoveis.find((i) => i.id === imovelId)?.proprietario_id === proprietarioId
     const nome = (id: string) => dados.imoveis.find((i) => i.id === id)?.identificacao ?? 'Imóvel excluído'
     return calcularRelatorio(
-      dados.recebimentos.filter((r) => doDono(r.imovel_id)),
-      dados.despesas.filter((d) => doDono(d.imovel_id)),
+      dados.recebimentos.filter((r) => doDono(r.imovel_id) && (!inquilino || r.inquilino_id === inquilino.id)),
+      // Despesas são do imóvel, não do inquilino: no filtro por inquilino ficam de fora.
+      inquilino ? [] : dados.despesas.filter((d) => doDono(d.imovel_id)),
       nome,
     )
-  }, [dados, proprietarioId])
+  }, [dados, doDono, inquilino])
 
   const dono = dados?.proprietarios.find((p) => p.id === proprietarioId)
   const subtitulo = `Ano-calendário ${ano}${dono ? ` · Proprietário: ${dono.nome}${dono.cpf_cnpj ? ` (CPF/CNPJ ${dono.cpf_cnpj})` : ''}` : ' · Todos os proprietários'}`
-  const base = `Relatório IR ${ano}${dono ? ` - ${dono.nome}` : ''}`
+    + (inquilino ? ` · Inquilino: ${inquilino.nome}${inquilino.cpf ? ` (CPF ${inquilino.cpf})` : ''}` : '')
+  const base = `Relatório IR ${ano}${dono ? ` - ${dono.nome}` : ''}${inquilino ? ` - ${inquilino.nome}` : ''}`
 
   async function executar(chave: string, acao: () => Promise<void>) {
     setErroAcao(null)
@@ -136,9 +153,13 @@ export function RelatoriosPage() {
         <select value={ano} onChange={(e) => setAno(Number(e.target.value))} aria-label="Ano">
           {Array.from({ length: 6 }, (_, i) => ANO_ATUAL - i).map((a) => <option key={a} value={a}>Ano {a}</option>)}
         </select>
-        <select value={proprietarioId} onChange={(e) => setProprietarioId(e.target.value)} aria-label="Proprietário">
+        <select value={proprietarioId} onChange={(e) => { setProprietarioId(e.target.value); setInquilinoId('') }} aria-label="Proprietário">
           <option value="">Todos os proprietários</option>
           {dados?.proprietarios.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+        </select>
+        <select value={inquilino ? inquilinoId : ''} onChange={(e) => setInquilinoId(e.target.value)} aria-label="Inquilino">
+          <option value="">Todos os inquilinos</option>
+          {inquilinos.map((q) => <option key={q.id} value={q.id}>{q.nome}</option>)}
         </select>
         <div className="grupo-botoes">
           <button className="botao botao--primario" onClick={pdf} disabled={!rel || gerando !== null}>{gerando === 'pdf' ? 'Gerando…' : 'PDF para o contador'}</button>
@@ -148,7 +169,13 @@ export function RelatoriosPage() {
       </div>
       <p className="texto-suave texto-pequeno paragrafo">
         Para declarar por proprietário (cada um declara os próprios aluguéis), escolha o proprietário acima antes de exportar.
+        Escolhendo um inquilino, o relatório mostra só o que ele pagou no ano (serve como comprovante anual para ele).
       </p>
+      {inquilino && (
+        <p className="alerta alerta--info paragrafo">
+          Mostrando só os pagamentos de <strong>{inquilino.nome}</strong>. As despesas ficam de fora, porque são do imóvel e não do inquilino.
+        </p>
+      )}
 
       {erro && <p className="alerta alerta--erro">{erro}</p>}
       {erroAcao && <p className="alerta alerta--erro">{erroAcao}</p>}
