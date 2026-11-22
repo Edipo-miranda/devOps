@@ -3,6 +3,8 @@ import { CampoData } from './CampoData'
 import { Modal } from './Modal'
 import { Campo, CamposCondicoes, CamposContrato, CamposLocacao, Secao } from './CamposLocacao'
 import { CamposPessoa } from './CamposPessoa'
+import { INDICE_COMPLETO } from '../lib/documentos'
+import { ExcluirInquilino } from './ExcluirInquilino'
 import { pessoaForm, validarPessoa } from '../lib/formularios'
 import {
   condicoesForm,
@@ -186,7 +188,18 @@ export function FormReajuste({ locacao, aoFechar, aoSalvar }: { locacao: Locacao
   const [data, setData] = useState(previsto && previsto <= hoje ? previsto : hoje)
   const [valor, setValor] = useState('')
   const [observacao, setObservacao] = useState('')
+  const [indicePct, setIndicePct] = useState('')
   const [aplicar, setAplicar] = useState(false)
+  const nomeIndice = INDICE_COMPLETO[locacao.indice_reajuste] ?? null
+
+  /** Calcula o novo valor a partir da variação do índice digitada (ex.: 4,68%). */
+  function aplicarPercentual(texto: string) {
+    setIndicePct(texto)
+    const p = Number(texto.replace(',', '.'))
+    if (!texto.trim() || !Number.isFinite(p)) return
+    setValor(valorParaCampo(Math.round(Number(locacao.valor_aluguel) * (1 + p / 100) * 100) / 100))
+    if (nomeIndice && !observacao) setObservacao(`${nomeIndice} acumulado de ${texto.trim().replace('.', ',')}%`)
+  }
   const [erros, setErros] = useState<Record<string, string>>({})
   const [erroGeral, setErroGeral] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
@@ -228,10 +241,22 @@ export function FormReajuste({ locacao, aoFechar, aoSalvar }: { locacao: Locacao
       <form onSubmit={salvar} noValidate>
         <p className="texto-suave paragrafo">
           Valor atual: <strong>{formatarMoeda(atual)}</strong>
-          {previsto && <> · reajuste previsto para <strong>{formatarData(previsto)}</strong></>}
-.
-          O novo valor é definido pelo proprietário; o app não faz cálculos.
+          {previsto && <> · reajuste previsto para <strong>{formatarData(previsto)}</strong></>}.
         </p>
+        {nomeIndice ? (
+          <p className="alerta alerta--info">
+            Pelo contrato, o reajuste segue a <strong>variação acumulada do {nomeIndice}</strong> nos últimos {locacao.reajuste_meses ?? 12} meses.
+            Consulte o percentual (por exemplo, na “Calculadora do Cidadão” do Banco Central ou no site do IBGE/FGV) e digite abaixo:
+            o novo valor é calculado sozinho. Você pode ajustá-lo se combinar outro valor.
+          </p>
+        ) : (
+          <p className="alerta alerta--info">Pelo contrato, o novo valor é <strong>definido pelo proprietário</strong>.</p>
+        )}
+        {nomeIndice && (
+          <Campo rotulo={`Variação acumulada do ${nomeIndice.split('/')[0]} (%)`} dica="opcional">
+            <input value={indicePct} onChange={(e) => aplicarPercentual(e.target.value)} inputMode="decimal" placeholder="Ex.: 4,68" />
+          </Campo>
+        )}
         <div className="grade-2">
           <Campo rotulo="Data do reajuste" erro={erros.data}>
             <CampoData valor={data} min={locacao.data_entrada} aoMudar={setData} />
@@ -363,7 +388,8 @@ export function FormEncerrarLocacao({ locacao, aoFechar, aoSalvar }: { locacao: 
 
 // --------------------------------------------------------- Editar inquilino
 
-export function FormEditarInquilino({ inquilino, aoFechar, aoSalvar }: { inquilino: Inquilino; aoFechar: () => void; aoSalvar: () => void }) {
+export function FormEditarInquilino({ inquilino, aoFechar, aoSalvar, aoExcluir }: { inquilino: Inquilino; aoFechar: () => void; aoSalvar: () => void; aoExcluir?: () => void }) {
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false)
   const [pessoa, setPessoa] = useState(() => pessoaForm(inquilino as unknown as Record<string, unknown>))
   const [erros, setErros] = useState<Record<string, string>>({})
   const [erroGeral, setErroGeral] = useState<string | null>(null)
@@ -393,8 +419,19 @@ export function FormEditarInquilino({ inquilino, aoFechar, aoSalvar }: { inquili
       <form onSubmit={salvar} noValidate>
         <CamposPessoa valores={pessoa} aoMudar={setPessoa} erros={erros} comNascimento rotuloEndereco="Endereço do inquilino (opcional)" />
         {erroGeral && <p className="alerta alerta--erro" role="alert">{erroGeral}</p>}
-        <Rodape salvando={salvando} aoFechar={aoFechar} />
+        <div className="acoes-form acoes-form--separadas">
+          {aoExcluir ? (
+            <button type="button" className="botao botao--discreto botao--texto-perigo" onClick={() => setConfirmarExclusao(true)}>Excluir inquilino</button>
+          ) : <span />}
+          <div className="grupo-botoes">
+            <button type="button" className="botao" onClick={aoFechar}>Cancelar</button>
+            <button type="submit" className="botao botao--primario" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</button>
+          </div>
+        </div>
       </form>
+      {confirmarExclusao && aoExcluir && (
+        <ExcluirInquilino inquilino={inquilino} aoFechar={() => setConfirmarExclusao(false)} aoExcluir={aoExcluir} />
+      )}
     </Modal>
   )
 }

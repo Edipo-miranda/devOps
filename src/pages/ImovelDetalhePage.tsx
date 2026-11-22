@@ -306,7 +306,12 @@ export function ImovelDetalhePage() {
         <GerarContrato dados={{ imovel, proprietario, locacao: janelaAberta.locacao }} aoFechar={() => fecharJanela()} />
       )}
       {janelaAberta?.tipo === 'inquilino' && (
-        <FormEditarInquilino inquilino={janelaAberta.inquilino} aoFechar={() => fecharJanela()} aoSalvar={() => concluido('Inquilino atualizado.')} />
+        <FormEditarInquilino
+          inquilino={janelaAberta.inquilino}
+          aoFechar={() => fecharJanela()}
+          aoSalvar={() => concluido('Inquilino atualizado.')}
+          aoExcluir={() => concluido('Inquilino e toda a movimentação dele foram excluídos.')}
+        />
       )}
 
       <Aviso aviso={aviso} aoFechar={fecharAviso} />

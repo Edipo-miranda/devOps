@@ -7,6 +7,9 @@ interface Props {
   largo?: boolean
 }
 
+// Janelas abertas (a última é a de cima): o Esc fecha só a de cima.
+const pilha: symbol[] = []
+
 /** Janela sobreposta. Fecha com Esc ou clicando fora. */
 export function Modal({ titulo, aoFechar, children, largo }: Props) {
   const caixa = useRef<HTMLDivElement>(null)
@@ -16,15 +19,18 @@ export function Modal({ titulo, aoFechar, children, largo }: Props) {
   })
 
   useEffect(() => {
+    const id = Symbol('modal')
+    pilha.push(id)
     function tecla(e: KeyboardEvent) {
-      if (e.key === 'Escape') fechar.current()
+      if (e.key === 'Escape' && pilha[pilha.length - 1] === id) fechar.current()
     }
     document.addEventListener('keydown', tecla)
     document.body.style.overflow = 'hidden'
     caixa.current?.querySelector<HTMLElement>('input, select, textarea')?.focus()
     return () => {
       document.removeEventListener('keydown', tecla)
-      document.body.style.overflow = ''
+      pilha.splice(pilha.indexOf(id), 1)
+      if (pilha.length === 0) document.body.style.overflow = ''
     }
   }, [])
 

@@ -20,10 +20,12 @@ Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e i
 │   ├── migrations/0002_funcoes_cadastro.sql ← cadastro "tudo ou nada" e encerramento de locação
 │   ├── migrations/0003_contratos_avisos.sql ← prazo de contrato, reajustes e avisos
 │   ├── migrations/0004_proprietarios_contrato.sql ← proprietários, dados p/ contrato, visão geral
+│   ├── migrations/0005_contrato_revisado_exclusao.sql ← índice de reajuste, IPTU, gênero, exclusão
 │   ├── tests/0001_verificar_banco.sql       ← testa o banco e apaga tudo que criou
 │   ├── tests/0002_verificar_funcoes_cadastro.sql
 │   ├── tests/0003_verificar_contratos_avisos.sql
-│   └── tests/0004_verificar_proprietarios_contrato.sql
+│   ├── tests/0004_verificar_proprietarios_contrato.sql
+│   └── tests/0005_verificar_contrato_exclusao.sql
 ├── src/
 │   ├── lib/supabase.ts       ← conexão com o Supabase (só chave pública)
 │   ├── lib/erros.ts          ← traduz erros para mensagens em português
@@ -261,6 +263,17 @@ O ícone "Aluguéis" aparece na tela inicial e o app abre em tela cheia. Ele pre
 
 Assinatura: no papel (imprimir e rubricar cada página) ou, de graça pela internet, no **Assinador gov.br**
 (assinador.iti.br). O texto é um modelo baseado na Lei nº 8.245/1991 — recomenda-se revisão por advogado.
+
+## Contrato revisado e exclusão (script 0005)
+
+1. Supabase → **SQL Editor**: rode `supabase/migrations/0005_contrato_revisado_exclusao.sql` → *Success*.
+2. Rode `supabase/tests/0005_verificar_contrato_exclusao.sql` → **7 linhas OK**.
+3. O contrato segue o modelo revisado (qualificação das partes, art. 42/46/47, reajuste por índice, encargos,
+   ausência de garantia, conservação, rescisão com fórmula proporcional, entrega das chaves, foro).
+4. **Excluir inquilino** (Imóveis e inquilinos → aba Inquilinos, ou Editar inquilino) apaga também todas as
+   locações, lançamentos, pagamentos e reajustes dele. **Excluir proprietário** mantém os imóveis, sem dono.
+5. Nomes, ruas, bairros e cidades são padronizados com iniciais maiúsculas ("Maria da Silva");
+   profissão e nacionalidade ficam em minúsculas, como no texto do contrato.
 
 ## Dar acesso a outra pessoa
 

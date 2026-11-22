@@ -1,7 +1,8 @@
 // Estado e validação dos blocos de formulário reaproveitados (endereço e dados pessoais).
 import { cnpjValido, cpfValido } from './documentos'
 import { REGEX_DATA, REGEX_TELEFONE } from './format'
-import type { Endereco } from '../types/database'
+import { capitalizarNome, minusculas } from './texto'
+import type { Endereco, Genero } from '../types/database'
 
 export type Erros = Record<string, string>
 
@@ -48,11 +49,11 @@ export function validarEndereco(f: EnderecoForm, obrigatorio: boolean, prefixo =
     erros,
     dados: {
       cep: ouNulo(f.cep),
-      logradouro: ouNulo(f.logradouro),
-      numero: ouNulo(f.numero),
-      complemento: ouNulo(f.complemento),
-      bairro: ouNulo(f.bairro),
-      cidade: ouNulo(f.cidade),
+      logradouro: ouNulo(capitalizarNome(f.logradouro)),
+      numero: ouNulo(f.numero.toLocaleUpperCase('pt-BR')),
+      complemento: ouNulo(capitalizarNome(f.complemento)),
+      bairro: ouNulo(capitalizarNome(f.bairro)),
+      cidade: ouNulo(capitalizarNome(f.cidade)),
       uf: ouNulo(f.uf),
     },
   }
@@ -71,6 +72,7 @@ export interface PessoaForm {
   profissao: string
   email: string
   data_nascimento: string
+  genero: '' | Genero
   endereco: EnderecoForm
 }
 
@@ -87,11 +89,12 @@ export function pessoaForm(p?: Record<string, unknown> | null): PessoaForm {
     profissao: s('profissao'),
     email: s('email'),
     data_nascimento: s('data_nascimento'),
+    genero: (s('genero') as PessoaForm['genero']) || '',
     endereco: enderecoForm(p as Partial<Endereco> | null),
   }
 }
 
-/** Valida nome, telefone, CPF/CNPJ, e-mail etc. Só o nome é obrigatório. */
+/** Valida nome, telefone, CPF/CNPJ, e-mail etc. Só o nome é obrigatório. Padroniza maiúsculas/minúsculas. */
 export function validarPessoa(f: PessoaForm, juridica = false) {
   const erros: Erros = {}
   if (f.nome.trim().length < 2) erros.nome = 'Informe o nome completo.'
@@ -107,16 +110,17 @@ export function validarPessoa(f: PessoaForm, juridica = false) {
   return {
     erros,
     dados: {
-      nome: f.nome.trim(),
+      nome: juridica ? f.nome.replace(/\s+/g, ' ').trim() : capitalizarNome(f.nome),
       telefone: ouNulo(f.telefone),
       documento: ouNulo(f.documento),
-      rg: ouNulo(f.rg),
-      orgao_emissor: ouNulo(f.orgao_emissor),
-      nacionalidade: ouNulo(f.nacionalidade),
+      rg: ouNulo(f.rg.toLocaleUpperCase('pt-BR')),
+      orgao_emissor: ouNulo(f.orgao_emissor.toLocaleUpperCase('pt-BR')),
+      nacionalidade: ouNulo(minusculas(f.nacionalidade)),
       estado_civil: ouNulo(f.estado_civil),
-      profissao: ouNulo(f.profissao),
-      email: ouNulo(f.email),
+      profissao: ouNulo(minusculas(f.profissao)),
+      email: ouNulo(f.email.toLocaleLowerCase('pt-BR')),
       data_nascimento: f.data_nascimento || null,
+      genero: f.genero || null,
       ...end.dados,
     },
   }

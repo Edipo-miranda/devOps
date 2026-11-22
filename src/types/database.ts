@@ -5,6 +5,8 @@ export type SituacaoLocacao = 'ativa' | 'encerrada'
 export type SituacaoRecebimento = 'em_aberto' | 'pago' | 'atrasado'
 export type Finalidade = 'residencial' | 'comercial'
 export type Garantia = 'nenhuma' | 'caucao' | 'fiador' | 'seguro_fianca' | 'titulo_capitalizacao'
+export type IndiceReajuste = 'IPCA' | 'IGP-M' | 'INPC' | 'IVAR' | 'proprietario'
+export type Genero = 'masculino' | 'feminino'
 
 /** Endereço separado em partes (imóvel, inquilino e proprietário). */
 export interface Endereco {
@@ -25,6 +27,7 @@ export interface Qualificacao {
   estado_civil: string | null
   profissao: string | null
   email: string | null
+  genero: Genero | null // concordância no contrato (brasileiro/brasileira…)
 }
 
 export interface Imovel extends Endereco {
@@ -83,6 +86,8 @@ export interface CondicoesContrato {
   encargos_locatario: string | null
   foro: string | null
   clausulas_adicionais: string | null
+  indice_reajuste: IndiceReajuste
+  iptu_por_conta: 'locador' | 'locatario'
 }
 
 export interface Locacao extends CondicoesContrato {

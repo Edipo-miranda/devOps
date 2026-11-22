@@ -13,14 +13,21 @@ export function GerarContrato({ dados, aoFechar }: { dados: DadosContrato; aoFec
   const { obrigatorio, recomendado } = pendenciasContrato(dados)
   const cidadePadrao = dados.imovel.cidade ? `${dados.imovel.cidade}${dados.imovel.uf ? `/${dados.imovel.uf}` : ''}` : ''
   const [cidade, setCidade] = useState(cidadePadrao)
-  const [data, setData] = useState(hojeBrasil())
+  const [data, setData] = useState('') // vazio = data em branco para preencher à mão
+  const [incluirPrimeiro, setIncluirPrimeiro] = useState(true)
+  const [primeiro, setPrimeiro] = useState({ periodo: '', valor: '', vencimento: '' })
   const [t1, setT1] = useState({ nome: '', cpf: '' })
   const [t2, setT2] = useState({ nome: '', cpf: '' })
   const [gerando, setGerando] = useState<'baixar' | 'compartilhar' | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [pronto, setPronto] = useState<string | null>(null)
 
-  const opcoes = (): OpcoesContrato => ({ cidadeAssinatura: cidade.trim(), dataAssinatura: data || hojeBrasil(), testemunhas: [t1, t2] })
+  const opcoes = (): OpcoesContrato => ({
+    cidadeAssinatura: cidade.trim(),
+    dataAssinatura: data,
+    testemunhas: [t1, t2],
+    primeiroPagamento: incluirPrimeiro ? primeiro : null,
+  })
   const podeCompartilhar = typeof navigator !== 'undefined' && 'canShare' in navigator
 
   async function gerar(acao: 'baixar' | 'compartilhar') {
@@ -77,10 +84,31 @@ export function GerarContrato({ dados, aoFechar }: { dados: DadosContrato; aoFec
         <Campo rotulo="Cidade da assinatura">
           <input value={cidade} onChange={(e) => setCidade(e.target.value)} maxLength={100} placeholder="Campinas/SP" />
         </Campo>
-        <Campo rotulo="Data da assinatura">
-          <CampoData valor={data} aoMudar={setData} />
+        <Campo rotulo="Data da assinatura" dica="vazio = em branco no contrato">
+          <div className="campo-com-botao">
+            <CampoData key={data ? 'com-data' : 'sem-data'} valor={data} aoMudar={setData} />
+            <button type="button" className="botao botao--pequeno" onClick={() => setData(hojeBrasil())}>Hoje</button>
+          </div>
         </Campo>
       </div>
+
+      <label className="checagem paragrafo">
+        <input type="checkbox" checked={incluirPrimeiro} onChange={(e) => setIncluirPrimeiro(e.target.checked)} />
+        <span>Incluir o parágrafo de <strong>primeiro pagamento proporcional</strong> (campos vazios saem em branco)</span>
+      </label>
+      {incluirPrimeiro && (
+        <div className="grade-3">
+          <Campo rotulo="Período" dica="opcional">
+            <input value={primeiro.periodo} onChange={(e) => setPrimeiro({ ...primeiro, periodo: e.target.value })} placeholder="21/11 a 04/12/2026" maxLength={60} />
+          </Campo>
+          <Campo rotulo="Valor (R$)" dica="opcional">
+            <input value={primeiro.valor} onChange={(e) => setPrimeiro({ ...primeiro, valor: e.target.value })} inputMode="decimal" placeholder="700,00" maxLength={20} />
+          </Campo>
+          <Campo rotulo="Vencimento" dica="opcional">
+            <input value={primeiro.vencimento} onChange={(e) => setPrimeiro({ ...primeiro, vencimento: e.target.value })} placeholder="05/12/2026" maxLength={20} />
+          </Campo>
+        </div>
+      )}
       <p className="subtitulo-form">Testemunhas <small className="texto-suave">(opcional — podem ser preenchidas à mão)</small></p>
       <div className="grade-2">
         <Campo rotulo="Testemunha 1 — nome"><input value={t1.nome} onChange={(e) => setT1({ ...t1, nome: e.target.value })} maxLength={150} /></Campo>

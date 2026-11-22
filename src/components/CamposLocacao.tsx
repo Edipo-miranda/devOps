@@ -2,7 +2,8 @@ import type { ReactNode } from 'react'
 import type { Inquilino } from '../types/database'
 import { CampoData } from './CampoData'
 import { CamposPessoa } from './CamposPessoa'
-import { GARANTIAS, mascararCpf } from '../lib/documentos'
+import { GARANTIAS, INDICES, mascararCpf } from '../lib/documentos'
+import { capitalizarNome } from '../lib/texto'
 import type { Erros } from '../lib/formularios'
 import { errosComPrefixo, type CondicoesForm, type ErrosLocacao, type ValoresContrato, type ValoresLocacao } from '../lib/validacaoLocacao'
 
@@ -145,7 +146,7 @@ export function CamposCondicoes({ valores, aoMudar, erros }: { valores: Condicoe
         <>
           <div className="grade-2">
             <Campo rotulo="Nome do fiador" erro={erros.fiadorNome}>
-              <input value={valores.fiadorNome} onChange={(e) => set('fiadorNome', e.target.value)} maxLength={150} />
+              <input value={valores.fiadorNome} onChange={(e) => set('fiadorNome', e.target.value)} onBlur={() => set('fiadorNome', capitalizarNome(valores.fiadorNome))} maxLength={150} />
             </Campo>
             <Campo rotulo="CPF do fiador" erro={erros.fiadorCpf}>
               <input value={valores.fiadorCpf} onChange={(e) => set('fiadorCpf', mascararCpf(e.target.value))} inputMode="numeric" placeholder="000.000.000-00" />
@@ -158,6 +159,19 @@ export function CamposCondicoes({ valores, aoMudar, erros }: { valores: Condicoe
         </>
       )}
 
+      <div className="grade-2">
+        <Campo rotulo="Índice do reajuste" dica="vai no contrato">
+          <select value={valores.indice} onChange={(e) => set('indice', e.target.value as CondicoesForm['indice'])}>
+            {Object.entries(INDICES).map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+          </select>
+        </Campo>
+        <Campo rotulo="IPTU por conta do">
+          <select value={valores.iptu} onChange={(e) => set('iptu', e.target.value as CondicoesForm['iptu'])}>
+            <option value="locador">Proprietário (locador)</option>
+            <option value="locatario">Inquilino (locatário)</option>
+          </select>
+        </Campo>
+      </div>
       <div className="grade-3">
         <Campo rotulo="Multa por atraso (%)" dica="texto do contrato" erro={erros.multaAtraso}>
           <input value={valores.multaAtraso} onChange={(e) => set('multaAtraso', e.target.value)} inputMode="decimal" placeholder="10" />
@@ -169,7 +183,7 @@ export function CamposCondicoes({ valores, aoMudar, erros }: { valores: Condicoe
           <input value={valores.multaRescisao} onChange={(e) => set('multaRescisao', e.target.value)} inputMode="decimal" placeholder="3" />
         </Campo>
       </div>
-      <Campo rotulo="Despesas por conta do inquilino">
+      <Campo rotulo="Consumos por conta do inquilino" dica="completa a frase: “…incluindo ___”">
         <textarea rows={2} value={valores.encargos} onChange={(e) => set('encargos', e.target.value)} maxLength={1000} />
       </Campo>
       <Campo rotulo="Foro (cidade/UF)" dica="vazio = cidade do imóvel">

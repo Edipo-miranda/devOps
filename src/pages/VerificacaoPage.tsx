@@ -78,6 +78,14 @@ export function VerificacaoPage() {
         : { nome: 'Proprietários e contrato (script 0004)', estado: 'ok' },
     )
 
+    // Contrato revisado e exclusão (0005). Id inexistente: responde "não encontrado" e nada é apagado.
+    const { error: erroExcluir } = await supabase.rpc('excluir_inquilino', { p_inquilino_id: '00000000-0000-0000-0000-000000000000' })
+    resultados.push(
+      erroExcluir?.code === 'P0001'
+        ? { nome: 'Contrato revisado e exclusão (script 0005)', estado: 'ok' }
+        : { nome: 'Contrato revisado e exclusão (script 0005)', estado: 'erro', detalhe: erroExcluir ? mensagemDeErro(erroExcluir) : 'Resposta inesperada do banco.' },
+    )
+
     return resultados
   }, [])
 

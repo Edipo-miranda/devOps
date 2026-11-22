@@ -83,6 +83,7 @@ export interface DadosInquilino extends Endereco {
   profissao: string | null
   email: string | null
   data_nascimento: string | null
+  genero: string | null
 }
 
 export interface DadosNovaLocacao {
@@ -421,4 +422,57 @@ export async function historicoMensal(meses = 12): Promise<HistoricoMes[]> {
     recebido: Number(h.recebido),
     atrasado: Number(h.atrasado),
   }))
+}
+
+// ---------------------------------------------------------------- Exclusão
+
+export interface MovimentacaoInquilino {
+  locacoes: number
+  ativas: number
+  lancamentos: number
+  pagos: number
+  imoveis: string[]
+}
+
+/** Conta o que será apagado junto com o inquilino (para a mensagem de confirmação). */
+export async function movimentacaoInquilino(id: string): Promise<MovimentacaoInquilino> {
+  const [loc, rec] = await Promise.all([
+    supabase.from('locacoes').select('id, situacao, imovel:imoveis(identificacao)').eq('inquilino_id', id),
+    supabase.from('vw_recebimentos').select('situacao').eq('inquilino_id', id),
+  ])
+  if (loc.error) throw loc.error
+  if (rec.error) throw rec.error
+  const locacoes = (loc.data ?? []) as unknown as { situacao: string; imovel: { identificacao: string } | null }[]
+  return {
+    locacoes: locacoes.length,
+    ativas: locacoes.filter((l) => l.situacao === 'ativa').length,
+    lancamentos: rec.data?.length ?? 0,
+    pagos: rec.data?.filter((r) => r.situacao === 'pago').length ?? 0,
+    imoveis: [...new Set(locacoes.map((l) => l.imovel?.identificacao).filter((x): x is string => Boolean(x)))],
+  }
+}
+
+/** Apaga o inquilino e toda a movimentação dele (locações, lançamentos, pagamentos e reajustes). */
+export async function excluirInquilino(id: string): Promise<void> {
+  const { error } = await supabase.rpc('excluir_inquilino', { p_inquilino_id: id })
+  if (error) throw error
+  invalidarMesAtual()
+  notificarAlteracao()
+}
+
+/** Apaga o proprietário. Os imóveis dele continuam, sem proprietário. Retorna quantos imóveis foram desvinculados. */
+export async function excluirProprietario(id: string): Promise<number> {
+  const { data, error } = await supabase.rpc('excluir_proprietario', { p_proprietario_id: id })
+  if (error) throw error
+  notificarAlteracao()
+  return data as number
+}
+
+export async function listarInquilinosComLocacoes() {
+  const { data, error } = await supabase
+    .from('inquilinos')
+    .select('*, locacoes(id, situacao, imovel:imoveis(id, identificacao))')
+    .order('nome')
+  if (error) throw error
+  return (data ?? []) as (Inquilino & { locacoes: { id: string; situacao: string; imovel: { id: string; identificacao: string } | null }[] })[]
 }

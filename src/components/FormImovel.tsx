@@ -6,6 +6,7 @@ import { CamposEndereco } from './CamposPessoa'
 import { validarLocacao, valoresLocacaoIniciais, type ErrosLocacao } from '../lib/validacaoLocacao'
 import { enderecoForm, validarEndereco, type Erros } from '../lib/formularios'
 import { TIPOS_IMOVEL, formatarEndereco } from '../lib/documentos'
+import { capitalizarNome, primeiraMaiuscula } from '../lib/texto'
 import {
   atualizarImovel,
   cadastrarImovel,
@@ -69,11 +70,11 @@ export function FormImovel({ imovel, aoFechar, aoSalvar }: Props) {
     }
 
     const dados: DadosImovel = {
-      identificacao: identificacao.trim(),
+      identificacao: capitalizarNome(identificacao),
       endereco: formatarEndereco(end.dados),
       observacoes: observacoes.trim() || null,
       tipo: tipo || null,
-      descricao: descricao.trim() || null,
+      descricao: descricao.trim() ? primeiraMaiuscula(descricao) : null,
       proprietario_id: proprietarioId || null,
       ...end.dados,
     }
@@ -103,7 +104,7 @@ export function FormImovel({ imovel, aoFechar, aoSalvar }: Props) {
       <form onSubmit={salvar} noValidate>
         <div className="grade-3">
           <Campo rotulo="Identificação" erro={erros.identificacao}>
-            <input value={identificacao} onChange={(e) => setIdentificacao(e.target.value)} maxLength={120} placeholder="Ex.: Apto 101" />
+            <input value={identificacao} onChange={(e) => setIdentificacao(e.target.value)} onBlur={() => setIdentificacao(capitalizarNome(identificacao))} maxLength={120} placeholder="Ex.: Apto 101" />
           </Campo>
           <Campo rotulo="Tipo">
             <select value={tipo} onChange={(e) => setTipo(e.target.value)}>

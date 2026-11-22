@@ -54,19 +54,45 @@ export function mascararCep(t: string): string {
   return digitos(t).slice(0, 8).replace(/^(\d{5})(\d)/, '$1-$2')
 }
 
-/** Busca o endereço do CEP no ViaCEP (serviço público e gratuito). Retorna null se não achar. */
+/**
+ * Busca o endereço do CEP (serviços públicos e gratuitos: ViaCEP e, se falhar, BrasilAPI).
+ * CEPs gerais de cidade (ex.: 86430-000) trazem só cidade e UF.
+ * Retorna null se o CEP não existir ou se não houver internet.
+ */
 export async function buscarCep(cep: string): Promise<Partial<Endereco> | null> {
   const d = digitos(cep)
   if (d.length !== 8) return null
+  const comTempo = (url: string) => {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 6000)
+    return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(t))
+  }
   try {
-    const r = await fetch(`https://viacep.com.br/ws/${d}/json/`)
+    const r = await comTempo(`https://viacep.com.br/ws/${d}/json/`)
+    if (r.ok) {
+      const j = await r.json()
+      if (j.erro) return null
+      return { logradouro: j.logradouro || null, bairro: j.bairro || null, cidade: j.localidade || null, uf: j.uf || null }
+    }
+  } catch {
+    // tenta o serviço reserva
+  }
+  try {
+    const r = await comTempo(`https://brasilapi.com.br/api/cep/v2/${d}`)
     if (!r.ok) return null
     const j = await r.json()
-    if (j.erro) return null
-    return { logradouro: j.logradouro || null, bairro: j.bairro || null, cidade: j.localidade || null, uf: j.uf || null }
+    return { logradouro: j.street || null, bairro: j.neighborhood || null, cidade: j.city || null, uf: j.state || null }
   } catch {
     return null
   }
+}
+
+/** Endereço por extenso para o contrato: "Rua X, nº 10, apto 2, Bairro, Cidade/UF, CEP 00000-000". */
+export function enderecoPorExtenso(e: Partial<Endereco>): string {
+  const cidade = [e.cidade, e.uf].filter(Boolean).join('/')
+  return [e.logradouro, e.numero ? `nº ${e.numero}` : null, e.complemento, e.bairro, cidade, e.cep ? `CEP ${e.cep}` : null]
+    .filter(Boolean)
+    .join(', ')
 }
 
 /** "Rua X, 10, apto 2 - Bairro - Cidade/UF - CEP 00000-000" (pula partes vazias). */
@@ -86,6 +112,22 @@ export const UFS = [
 export const ESTADOS_CIVIS = ['solteiro(a)', 'casado(a)', 'divorciado(a)', 'viúvo(a)', 'separado(a)', 'união estável']
 
 export const TIPOS_IMOVEL = ['casa', 'apartamento', 'kitnet', 'sala comercial', 'loja', 'galpão', 'terreno', 'outro']
+
+export const INDICES: Record<string, string> = {
+  IPCA: 'IPCA (IBGE) — recomendado',
+  'IGP-M': 'IGP-M (FGV)',
+  INPC: 'INPC (IBGE)',
+  IVAR: 'IVAR (FGV) — índice de aluguéis',
+  proprietario: 'Sem índice — valor definido pelo proprietário',
+}
+
+/** Nome completo do índice para o contrato: "IPCA/IBGE". */
+export const INDICE_COMPLETO: Record<string, string> = {
+  IPCA: 'IPCA/IBGE',
+  'IGP-M': 'IGP-M/FGV',
+  INPC: 'INPC/IBGE',
+  IVAR: 'IVAR/FGV',
+}
 
 export const GARANTIAS: Record<string, string> = {
   nenhuma: 'Sem garantia',

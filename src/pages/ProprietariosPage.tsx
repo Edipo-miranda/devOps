@@ -3,7 +3,8 @@ import { Aviso, type AvisoDados } from '../components/Aviso'
 import { Modal } from '../components/Modal'
 import { Campo, Secao } from '../components/CamposLocacao'
 import { CamposPessoa } from '../components/CamposPessoa'
-import { definirProprietarioAtivo, listarProprietarios, salvarProprietario } from '../lib/api'
+import { ConfirmarExclusao } from '../components/ConfirmarExclusao'
+import { definirProprietarioAtivo, excluirProprietario, listarProprietarios, salvarProprietario } from '../lib/api'
 import { mensagemDeErro } from '../lib/erros'
 import { pessoaForm, validarPessoa } from '../lib/formularios'
 import { useCarregar } from '../lib/useCarregar'
@@ -16,6 +17,7 @@ export function ProprietariosPage() {
   const [busca, setBusca] = useState('')
   const [mostrarInativos, setMostrarInativos] = useState(false)
   const [editando, setEditando] = useState<Proprietario | 'novo' | null>(null)
+  const [excluindo, setExcluindo] = useState<(Proprietario & { imoveis: { count: number }[] }) | null>(null)
   const [aviso, setAviso] = useState<AvisoDados | null>(null)
   const fecharAviso = useCallback(() => setAviso(null), [])
 
@@ -81,6 +83,7 @@ export function ProprietariosPage() {
                   <td className="acoes">
                     <button className="botao botao--pequeno" onClick={() => setEditando(p)}>Editar</button>
                     <button className="botao botao--pequeno botao--discreto" onClick={() => alternarAtivo(p)}>{p.ativo ? 'Desativar' : 'Reativar'}</button>
+                    <button className="botao botao--pequeno botao--discreto botao--texto-perigo" onClick={() => setExcluindo(p)}>Excluir</button>
                   </td>
                 </tr>
               ))}
@@ -99,6 +102,28 @@ export function ProprietariosPage() {
             recarregar()
           }}
         />
+      )}
+      {excluindo && (
+        <ConfirmarExclusao
+          titulo="Excluir proprietário"
+          aoFechar={() => setExcluindo(null)}
+          aoConfirmar={async () => {
+            const n = await excluirProprietario(excluindo.id)
+            setExcluindo(null)
+            setAviso({ tipo: 'ok', texto: n > 0 ? `Proprietário excluído. ${n} imóvel(is) ficaram sem proprietário.` : 'Proprietário excluído.' })
+            recarregar()
+          }}
+        >
+          <p>Você vai excluir <strong>{excluindo.nome}</strong>{excluindo.cpf_cnpj ? ` (${excluindo.cpf_cnpj})` : ''}.</p>
+          {(excluindo.imoveis?.[0]?.count ?? 0) > 0 ? (
+            <p>
+              Ele está ligado a <strong>{excluindo.imoveis[0].count} imóvel(is)</strong>. Os imóveis, inquilinos e recebimentos <strong>não</strong> serão
+              apagados — apenas ficarão sem proprietário. Depois, vincule o proprietário certo em “Editar imóvel”.
+            </p>
+          ) : (
+            <p>Ele não está ligado a nenhum imóvel.</p>
+          )}
+        </ConfirmarExclusao>
       )}
       <Aviso aviso={aviso} aoFechar={fecharAviso} />
     </section>

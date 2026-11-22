@@ -2,7 +2,8 @@ import type { DadosNovaLocacao } from './api'
 import { cpfValido } from './documentos'
 import { REGEX_DATA, hojeBrasil, lerValor, valorParaCampo } from './format'
 import { pessoaForm, validarPessoa, type Erros, type PessoaForm } from './formularios'
-import type { CondicoesContrato, Finalidade, Garantia } from '../types/database'
+import { capitalizarNome } from './texto'
+import type { CondicoesContrato, Finalidade, Garantia, IndiceReajuste } from '../types/database'
 
 // ------------------------------------------------------ Condições do contrato
 
@@ -19,10 +20,11 @@ export interface CondicoesForm {
   encargos: string
   foro: string
   clausulas: string
+  indice: IndiceReajuste
+  iptu: 'locador' | 'locatario'
 }
 
-export const ENCARGOS_PADRAO =
-  'consumo de água, energia elétrica e gás, taxas condominiais ordinárias e IPTU proporcional ao período da locação'
+export const ENCARGOS_PADRAO = 'água, energia elétrica, gás, internet e outros serviços que contratar ou utilizar'
 
 export function condicoesForm(c?: Partial<CondicoesContrato> | null): CondicoesForm {
   const n = (v: number | null | undefined) => (v === null || v === undefined ? '' : String(v).replace('.', ','))
@@ -33,12 +35,14 @@ export function condicoesForm(c?: Partial<CondicoesContrato> | null): CondicoesF
     fiadorNome: c?.fiador_nome ?? '',
     fiadorCpf: c?.fiador_cpf ?? '',
     fiadorQualificacao: c?.fiador_qualificacao ?? '',
-    multaAtraso: c ? n(c.multa_atraso_percentual) : '10',
+    multaAtraso: c ? n(c.multa_atraso_percentual) : '2',
     jurosAtraso: c ? n(c.juros_atraso_percentual) : '1',
     multaRescisao: c ? n(c.multa_rescisao_alugueis) : '3',
     encargos: c ? (c.encargos_locatario ?? '') : ENCARGOS_PADRAO,
     foro: c?.foro ?? '',
     clausulas: c?.clausulas_adicionais ?? '',
+    indice: c?.indice_reajuste ?? 'IPCA',
+    iptu: c?.iptu_por_conta ?? 'locador',
   }
 }
 
@@ -72,7 +76,7 @@ export function validarCondicoes(f: CondicoesForm): { erros: Erros; dados: Condi
       finalidade: f.finalidade,
       garantia: f.garantia,
       valor_garantia: valorGarantia,
-      fiador_nome: fiador ? f.fiadorNome.trim() || null : null,
+      fiador_nome: fiador ? capitalizarNome(f.fiadorNome) || null : null,
       fiador_cpf: fiador ? f.fiadorCpf || null : null,
       fiador_qualificacao: fiador ? f.fiadorQualificacao.trim() || null : null,
       multa_atraso_percentual: multa ?? null,
@@ -81,6 +85,8 @@ export function validarCondicoes(f: CondicoesForm): { erros: Erros; dados: Condi
       encargos_locatario: f.encargos.trim() || null,
       foro: f.foro.trim() || null,
       clausulas_adicionais: f.clausulas.trim() || null,
+      indice_reajuste: f.indice,
+      iptu_por_conta: f.iptu,
     },
   }
 }

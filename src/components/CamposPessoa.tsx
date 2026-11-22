@@ -3,6 +3,7 @@ import { Campo } from './CamposLocacao'
 import { CampoData } from './CampoData'
 import { ESTADOS_CIVIS, UFS, buscarCep, mascararCep, mascararCnpj, mascararCpf } from '../lib/documentos'
 import type { EnderecoForm, Erros, PessoaForm } from '../lib/formularios'
+import { capitalizarNome, minusculas } from '../lib/texto'
 
 // ------------------------------------------------------------------ Endereço
 
@@ -28,9 +29,10 @@ export function CamposEndereco({ valores, aoMudar, erros, prefixo = '' }: PropsE
     const achado = await buscarCep(cep)
     setBuscando(false)
     if (!achado) {
-      setAvisoCep('CEP não encontrado. Preencha o endereço manualmente.')
+      setAvisoCep('CEP não encontrado (ou sem internet). Preencha o endereço manualmente.')
       return
     }
+    if (!achado.logradouro) setAvisoCep('CEP geral da cidade: cidade e UF preenchidas. Digite a rua e o bairro.')
     aoMudar({
       ...valores,
       cep,
@@ -48,7 +50,7 @@ export function CamposEndereco({ valores, aoMudar, erros, prefixo = '' }: PropsE
           <input value={valores.cep} onChange={(e) => mudarCep(e.target.value)} inputMode="numeric" placeholder="00000-000" maxLength={9} />
         </Campo>
         <Campo rotulo="Rua / Avenida" erro={erros[prefixo + 'logradouro']}>
-          <input value={valores.logradouro} onChange={(e) => set('logradouro', e.target.value)} maxLength={200} />
+          <input value={valores.logradouro} onChange={(e) => set('logradouro', e.target.value)} onBlur={() => set('logradouro', capitalizarNome(valores.logradouro))} maxLength={200} />
         </Campo>
         <Campo rotulo="Número" erro={erros[prefixo + 'numero']}>
           <input value={valores.numero} onChange={(e) => set('numero', e.target.value)} maxLength={20} placeholder="123 ou s/n" />
@@ -56,13 +58,13 @@ export function CamposEndereco({ valores, aoMudar, erros, prefixo = '' }: PropsE
       </div>
       <div className="grade-endereco-2">
         <Campo rotulo="Complemento" dica="opcional">
-          <input value={valores.complemento} onChange={(e) => set('complemento', e.target.value)} maxLength={100} placeholder="Apto, bloco, fundos…" />
+          <input value={valores.complemento} onChange={(e) => set('complemento', e.target.value)} onBlur={() => set('complemento', capitalizarNome(valores.complemento))} maxLength={100} placeholder="Apto, bloco, fundos…" />
         </Campo>
         <Campo rotulo="Bairro" erro={erros[prefixo + 'bairro']}>
-          <input value={valores.bairro} onChange={(e) => set('bairro', e.target.value)} maxLength={100} />
+          <input value={valores.bairro} onChange={(e) => set('bairro', e.target.value)} onBlur={() => set('bairro', capitalizarNome(valores.bairro))} maxLength={100} />
         </Campo>
         <Campo rotulo="Cidade" erro={erros[prefixo + 'cidade']}>
-          <input value={valores.cidade} onChange={(e) => set('cidade', e.target.value)} maxLength={100} />
+          <input value={valores.cidade} onChange={(e) => set('cidade', e.target.value)} onBlur={() => set('cidade', capitalizarNome(valores.cidade))} maxLength={100} />
         </Campo>
         <Campo rotulo="UF" erro={erros[prefixo + 'uf']}>
           <select value={valores.uf} onChange={(e) => set('uf', e.target.value)}>
@@ -94,7 +96,7 @@ export function CamposPessoa({ valores, aoMudar, erros, juridica, comNascimento,
     <>
       <div className="grade-2">
         <Campo rotulo={juridica ? 'Razão social' : 'Nome completo'} erro={erros.nome}>
-          <input value={valores.nome} onChange={(e) => set('nome', e.target.value)} maxLength={150} autoComplete="off" />
+          <input value={valores.nome} onChange={(e) => set('nome', e.target.value)} onBlur={() => !juridica && set('nome', capitalizarNome(valores.nome))} maxLength={150} autoComplete="off" />
         </Campo>
         <Campo rotulo="Telefone" dica="opcional" erro={erros.telefone}>
           <input value={valores.telefone} onChange={(e) => set('telefone', e.target.value)} inputMode="tel" placeholder="(11) 98765-4321" maxLength={20} />
@@ -123,7 +125,7 @@ export function CamposPessoa({ valores, aoMudar, erros, juridica, comNascimento,
       {!juridica && (
         <div className="grade-3">
           <Campo rotulo="Nacionalidade">
-            <input value={valores.nacionalidade} onChange={(e) => set('nacionalidade', e.target.value)} maxLength={40} />
+            <input value={valores.nacionalidade} onChange={(e) => set('nacionalidade', e.target.value)} onBlur={() => set('nacionalidade', minusculas(valores.nacionalidade))} maxLength={40} />
           </Campo>
           <Campo rotulo="Estado civil">
             <select value={valores.estado_civil} onChange={(e) => set('estado_civil', e.target.value)}>
@@ -132,11 +134,20 @@ export function CamposPessoa({ valores, aoMudar, erros, juridica, comNascimento,
             </select>
           </Campo>
           <Campo rotulo="Profissão">
-            <input value={valores.profissao} onChange={(e) => set('profissao', e.target.value)} maxLength={60} />
+            <input value={valores.profissao} onChange={(e) => set('profissao', e.target.value)} onBlur={() => set('profissao', minusculas(valores.profissao))} maxLength={60} />
           </Campo>
         </div>
       )}
-      <div className="grade-2">
+      <div className="grade-3">
+        {!juridica && (
+          <Campo rotulo="Gênero" dica="concordância no contrato">
+            <select value={valores.genero} onChange={(e) => set('genero', e.target.value as PessoaForm['genero'])}>
+              <option value="">—</option>
+              <option value="masculino">Masculino</option>
+              <option value="feminino">Feminino</option>
+            </select>
+          </Campo>
+        )}
         <Campo rotulo="E-mail" dica="opcional" erro={erros.email}>
           <input type="email" value={valores.email} onChange={(e) => set('email', e.target.value)} maxLength={120} />
         </Campo>

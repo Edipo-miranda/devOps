@@ -447,6 +447,16 @@ a.botao { text-decoration: none; display: inline-block; }
 .grafico__mes:hover .grafico__barra { filter: brightness(0.9); }
 .grafico__rotulo { font-size: 0.7rem; font-weight: 600; color: var(--texto-suave); text-transform: capitalize; }
 
+/* Exclusão */
+.botao--perigo { background: var(--erro); border-color: var(--erro); color: #fff; }
+.botao--perigo:hover { background: #b91c1c; }
+.botao--texto-perigo { color: var(--erro) !important; }
+.botao--texto-perigo:hover { background: var(--erro-fundo) !important; }
+.alerta--exclusao p { margin: 6px 0 0; }
+.acoes-form--separadas { justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.campo-com-botao { display: flex; gap: 8px; align-items: center; }
+.campo-com-botao .campo-data { flex: 1; }
+
 /* ============================ Telas médias ============================ */
 @media (max-width: 1100px) {
   .indicadores { grid-template-columns: repeat(2, 1fr); }

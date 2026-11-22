@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { ListaInquilinos } from '../components/ListaInquilinos'
 import { FormImovel } from '../components/FormImovel'
 import { listarImoveis } from '../lib/api'
 import { formatarData, formatarMoeda } from '../lib/format'
@@ -11,6 +12,8 @@ const normalizar = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toL
 
 export function ImoveisPage() {
   const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const aba = params.get('aba') === 'inquilinos' ? 'inquilinos' : 'imoveis'
   const [filtro, setFiltro] = useState<Filtro>('ativos')
   const [busca, setBusca] = useState('')
   const [novo, setNovo] = useState(false)
@@ -35,6 +38,13 @@ export function ImoveisPage() {
         </div>
         <button className="botao botao--primario" onClick={() => setNovo(true)}>+ Novo imóvel</button>
       </div>
+
+      <div className="abas" role="tablist" aria-label="Imóveis ou inquilinos">
+        <button role="tab" aria-selected={aba === 'imoveis'} className={aba === 'imoveis' ? 'ativa' : ''} onClick={() => setParams({})}>Imóveis</button>
+        <button role="tab" aria-selected={aba === 'inquilinos'} className={aba === 'inquilinos' ? 'ativa' : ''} onClick={() => setParams({ aba: 'inquilinos' })}>Inquilinos</button>
+      </div>
+
+      {aba === 'inquilinos' ? <ListaInquilinos /> : <>
 
       <div className="barra-filtros">
         <input
@@ -104,6 +114,8 @@ export function ImoveisPage() {
           </table>
         </div>
       )}
+
+      </>}
 
       {novo && (
         <FormImovel aoFechar={() => setNovo(false)} aoSalvar={(id) => navigate(`/imoveis/${id}`)} />
