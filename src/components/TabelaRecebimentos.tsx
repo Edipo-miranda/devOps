@@ -72,28 +72,28 @@ export function TabelaRecebimentos({ linhas, aoAlterar, aoErro, ocultarImovel }:
           <tbody>
             {linhas.map((r) => (
               <tr key={r.id}>
-                <td data-rotulo="Inquilino">
+                <td data-rotulo="Inquilino"><div>
                   <div className="destaque">{r.inquilino_nome}</div>
                   {!ocultarImovel && <div className="texto-suave texto-pequeno">{r.imovel_identificacao}</div>}
-                </td>
+                </div></td>
                 <td data-rotulo="Referência">{formatarMesReferencia(r.mes_referencia)}</td>
-                <td data-rotulo="Previsto" className="num">
-                  {formatarMoeda(r.valor_previsto)}
+                <td data-rotulo="Previsto" className="num"><div>
+                  <div>{formatarMoeda(r.valor_previsto)}</div>
                   <div className="texto-suave texto-pequeno">vence {formatarData(r.data_vencimento)}</div>
                   {r.situacao === 'atrasado' && cobrarEncargos && (() => {
                     const enc = calcularEncargos(Number(r.valor_previsto), r.data_vencimento, hoje, r.multa_atraso_percentual, r.juros_atraso_percentual)
                     return enc.total > 0 ? (
-                      <div className="texto-erro texto-pequeno" title="Com multa e juros até hoje">hoje: {formatarMoeda(Number(r.valor_previsto) + enc.total)}</div>
+                      <div className="texto-erro texto-pequeno" title="Com multa e juros até hoje">com multa e juros hoje: <strong>{formatarMoeda(Number(r.valor_previsto) + enc.total)}</strong></div>
                     ) : null
                   })()}
-                </td>
+                </div></td>
                 <td data-rotulo="Situação"><SeloSituacao situacao={r.situacao} diasAtraso={r.dias_atraso} /></td>
-                <td data-rotulo="Recebido" className="num">
-                  {formatarMoeda(r.valor_recebido)}
+                <td data-rotulo="Recebido" className="num"><div>
+                  <div>{formatarMoeda(r.valor_recebido)}</div>
                   {r.data_pagamento && <div className="texto-suave texto-pequeno">em {formatarData(r.data_pagamento)}</div>}
                   {r.valor_encargos ? <div className="texto-suave texto-pequeno">c/ multa e juros {formatarMoeda(r.valor_encargos)}</div> : null}
                   {r.observacao && <div className="texto-suave texto-pequeno">{r.observacao}</div>}
-                </td>
+                </div></td>
                 <td className="acoes"><div className="acoes__grupo">
                   {r.situacao === 'pago' ? (
                     <>
