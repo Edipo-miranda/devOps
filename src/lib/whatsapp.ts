@@ -24,7 +24,8 @@ export function mensagemCobranca(r: RecebimentoDetalhado, cobrarEncargos: boolea
     linhas.push(`Consta em aberto o aluguel de ${ref} do imóvel ${r.imovel_identificacao}, que venceu em ${formatarData(r.data_vencimento)} (${enc.dias} ${enc.dias === 1 ? 'dia' : 'dias'} de atraso).`)
     if (cobrarEncargos && enc.total > 0) {
       linhas.push(`Valor do aluguel: ${formatarMoeda(valor)}`)
-      linhas.push(`Multa e juros até hoje: ${formatarMoeda(enc.total)}`)
+      if (enc.multa > 0) linhas.push(`Multa por atraso (${Number(r.multa_atraso_percentual)}%): ${formatarMoeda(enc.multa)}`)
+      if (enc.juros > 0) linhas.push(`Juros (${Number(r.juros_atraso_percentual)}% ao mês, ${enc.dias} ${enc.dias === 1 ? 'dia' : 'dias'}): ${formatarMoeda(enc.juros)}`)
       linhas.push(`*Total para pagamento hoje: ${formatarMoeda(valor + enc.total)}*`)
     } else {
       linhas.push(`*Valor: ${formatarMoeda(valor)}*`)

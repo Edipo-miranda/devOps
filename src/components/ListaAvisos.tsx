@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { IconeWhatsApp } from './Icones'
+import { BotaoCobrar } from './BotaoCobrar'
 import { Link } from 'react-router-dom'
 import { FormPagamento } from './FormsRecebimento'
 import { buscarRecebimento, buscarRecebimentos, lerConfiguracoes } from '../lib/api'
 import { useCarregar } from '../lib/useCarregar'
-import { linkWhatsApp, mensagemCobranca } from '../lib/whatsapp'
 import { mensagemDeErro } from '../lib/erros'
 import { formatarData, formatarMoeda } from '../lib/format'
 import type { Aviso, RecebimentoDetalhado, TipoAviso } from '../types/database'
@@ -86,13 +85,7 @@ export function ListaAvisos({ avisos, aoAlterar, aoErro }: Props) {
                 </button>
               )}
               {a.recebimento_id && extra?.recs.get(a.recebimento_id) && (() => {
-                const r = extra.recs.get(a.recebimento_id!)!
-                return (
-                  <a className="botao botao--pequeno botao--whatsapp" target="_blank" rel="noreferrer"
-                    href={linkWhatsApp(r.inquilino_telefone, mensagemCobranca(r, extra.cobrar))}>
-                    <IconeWhatsApp /> {a.tipo === 'parcela_atrasada' ? 'Cobrar' : 'Lembrar'}
-                  </a>
-                )
+                return <BotaoCobrar r={extra.recs.get(a.recebimento_id!)!} cobrarPadrao={extra.cobrar} />
               })()}
               {a.tipo === 'fim_contrato' && (
                 <Link className="botao botao--pequeno" to={`/imoveis/${a.imovel_id}?acao=renovar`}>Renovar / encerrar</Link>

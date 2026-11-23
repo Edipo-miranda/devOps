@@ -357,6 +357,7 @@ a.botao { text-decoration: none; display: inline-block; }
 .aviso-item__acoes { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 
 /* ============================ Janela (modal) ============================ */
+.modal { text-align: left; white-space: normal; font-weight: 400; }
 .modal {
   position: fixed; inset: 0; z-index: 50; background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(3px);
   display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px 16px; overflow-y: auto;
@@ -543,6 +544,13 @@ a.botao { text-decoration: none; display: inline-block; }
   display: inline-flex !important; align-items: center; gap: 6px;
   background: #25d366; border-color: #25d366; color: #fff; box-shadow: 0 3px 10px rgba(37, 211, 102, 0.35);
 }
+.opcoes-cobranca { display: grid; gap: 10px; margin-bottom: 18px; }
+.opcao-cobranca { display: flex; gap: 12px; align-items: flex-start; border: 2px solid var(--borda); border-radius: var(--raio-p); padding: 14px; cursor: pointer; }
+.opcao-cobranca input { accent-color: var(--primaria); width: 18px; height: 18px; margin-top: 2px; flex: none; }
+.opcao-cobranca--ativa { border-color: var(--primaria); background: #f0fdfa; }
+.opcao-cobranca__valor { font-weight: 800; color: var(--primaria-forte); }
+.opcao-cobranca__detalhe { display: block; margin-top: 2px; }
+.previa-mensagem { white-space: pre-wrap; background: #dcf8c6; color: #111b21; border-radius: 12px 12px 12px 2px; padding: 12px 14px; font-size: 0.875rem; line-height: 1.45; max-height: 260px; overflow: auto; }
 .botao--whatsapp:hover { background: #1ebe5b; border-color: #1ebe5b; }
 .botao--whatsapp svg path:first-child { fill: #fff; }
 .botao--whatsapp svg path:last-child { fill: #25d366; }
