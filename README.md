@@ -26,6 +26,7 @@ Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e i
 │   ├── migrations/0007_financeiro_documentos.sql ← despesas, multa/juros, matrícula/IPTU, caução
 │   ├── migrations/0008_documentos_modelos.sql ← documentos anexados e modelos de contrato
 │   ├── migrations/0009_uso_armazenamento.sql ← espaço usado pelos documentos
+│   ├── migrations/0010_limite_documentos.sql ← limite de documentos por usuário (100 MB)
 │   ├── tests/0001_verificar_banco.sql       ← testa o banco e apaga tudo que criou
 │   ├── tests/0002_verificar_funcoes_cadastro.sql
 │   ├── tests/0003_verificar_contratos_avisos.sql
@@ -34,7 +35,8 @@ Aplicativo web para controlar o recebimento de aluguéis de vários imóveis e i
 │   ├── tests/0006_verificar_venda_exclusao_imovel.sql
 │   ├── tests/0007_verificar_financeiro.sql
 │   ├── tests/0008_verificar_documentos_modelos.sql
-│   └── tests/0009_verificar_uso_armazenamento.sql
+│   ├── tests/0009_verificar_uso_armazenamento.sql
+│   └── tests/0010_verificar_limite_documentos.sql
 ├── src/
 │   ├── lib/supabase.ts       ← conexão com o Supabase (só chave pública)
 │   ├── lib/erros.ts          ← traduz erros para mensagens em português
@@ -330,6 +332,18 @@ Assinatura: no papel (imprimir e rubricar cada página) ou, de graça pela inter
    comparado com o 1 GB do plano gratuito (o limite é do projeto Supabase, somado entre todos os usuários).
 4. Fotos anexadas são **reduzidas automaticamente** (até 1920 px, JPEG) antes de enviar — ex.: 11,6 MB → 469 KB.
    PDFs e Word são enviados como estão.
+
+## Limite de documentos por usuário (script 0010)
+
+1. Supabase → **SQL Editor**: rode `supabase/migrations/0010_limite_documentos.sql` → *Success*.
+2. Rode `supabase/tests/0010_verificar_limite_documentos.sql` → **6 linhas OK**.
+3. Cada usuário pode guardar até **100 MB** de documentos. Ao chegar no limite, o sistema avisa e o próprio
+   banco recusa novos envios — assim um cliente não ocupa sozinho o 1 GB que é de todos.
+4. Para dar **mais espaço** a um cliente (ex.: plano com mais espaço), rode no SQL Editor:
+   ```sql
+   select public.definir_limite_documentos('email.do.cliente@exemplo.com', 300);  -- 300 MB
+   ```
+   Para voltar ao padrão de 100 MB: troque `300` por `null`. Só o administrador (SQL Editor) consegue mudar.
 
 ## Instalar para um cliente novo (Supabase só dele)
 

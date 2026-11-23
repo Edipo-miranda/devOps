@@ -54,6 +54,6 @@ export async function reduzirImagem(arquivo: File): Promise<ResultadoReducao> {
 export function tamanhoLegivel(bytes: number | null | undefined): string {
   if (!bytes) return '0 KB'
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2).replace('.', ',')} GB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1).replace(/\.0$/, '').replace('.', ',')} MB`
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2).replace(/\.00$/, '').replace('.', ',')} GB`
 }

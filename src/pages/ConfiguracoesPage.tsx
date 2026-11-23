@@ -96,14 +96,14 @@ function FormConfiguracoes({ inicial }: { inicial: Configuracoes }) {
 
 const LIMITE_GRATUITO = 1024 * 1024 * 1024 // 1 GB no plano gratuito do Supabase (para o projeto todo)
 
-function BarraUso({ rotulo, bytes, arquivos }: { rotulo: string; bytes: number; arquivos: number }) {
-  const pct = Math.min(100, (bytes / LIMITE_GRATUITO) * 100)
+function BarraUso({ rotulo, bytes, arquivos, limite }: { rotulo: string; bytes: number; arquivos: number; limite: number }) {
+  const pct = Math.min(100, (bytes / limite) * 100)
   const classe = pct >= 90 ? 'uso__barra--critico' : pct >= 70 ? 'uso__barra--alerta' : ''
   return (
     <div className="uso">
       <div className="uso__topo">
         <span>{rotulo}</span>
-        <strong>{tamanhoLegivel(bytes)} <span className="texto-suave">de 1 GB · {arquivos} arquivo(s)</span></strong>
+        <strong>{tamanhoLegivel(bytes)} <span className="texto-suave">de {tamanhoLegivel(limite)} · {arquivos} arquivo(s)</span></strong>
       </div>
       <div className="uso__trilho"><span className={`uso__barra ${classe}`} style={{ width: `${Math.max(pct, bytes > 0 ? 1 : 0)}%` }} /></div>
     </div>
@@ -116,12 +116,19 @@ function Armazenamento() {
   if (erro) return <p className="alerta alerta--erro">{erro}</p>
   if (!dados) return <p className="texto-suave">Carregando…</p>
   const pctTotal = (dados.total_bytes / LIMITE_GRATUITO) * 100
+  const pctMeu = (dados.meus_bytes / dados.meu_limite) * 100
   return (
     <div className="cartao cartao--estreito">
-      <BarraUso rotulo="Seus documentos" bytes={dados.meus_bytes} arquivos={dados.meus_arquivos} />
-      <BarraUso rotulo="Sistema inteiro (todos os usuários)" bytes={dados.total_bytes} arquivos={dados.total_arquivos} />
+      <BarraUso rotulo="Seus documentos" bytes={dados.meus_bytes} arquivos={dados.meus_arquivos} limite={dados.meu_limite} />
+      {pctMeu >= 90 && (
+        <p className="alerta alerta--erro paragrafo">
+          {pctMeu >= 100 ? 'Seu espaço para documentos acabou.' : 'Seu espaço para documentos está quase no fim.'} Exclua documentos antigos ou peça mais espaço ao suporte.
+        </p>
+      )}
+      <BarraUso rotulo="Sistema inteiro (todos os usuários)" bytes={dados.total_bytes} arquivos={dados.total_arquivos} limite={LIMITE_GRATUITO} />
       <p className="texto-suave texto-pequeno">
-        O plano gratuito do Supabase tem 1 GB para todos os usuários juntos. As fotos são reduzidas automaticamente ao anexar.
+        Cada usuário pode guardar até {tamanhoLegivel(dados.meu_limite)} de documentos. O plano gratuito do Supabase tem 1 GB para todos
+        os usuários juntos. As fotos são reduzidas automaticamente ao anexar.
         {pctTotal >= 80 && <> <strong className="texto-erro">O espaço está acabando:</strong> exclua documentos antigos ou passe para o plano Pro (100 GB).</>}
       </p>
     </div>

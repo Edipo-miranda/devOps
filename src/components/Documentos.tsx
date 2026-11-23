@@ -2,7 +2,7 @@ import { useRef, useState, type FormEvent } from 'react'
 import { Modal } from './Modal'
 import { Campo } from './CamposLocacao'
 import { IconeDocumento } from './Icones'
-import { enviarDocumento, excluirDocumento, linkDocumento, listarDocumentos, type LocacaoComInquilino } from '../lib/api'
+import { enviarDocumento, excluirDocumento, linkDocumento, listarDocumentos, usoArmazenamento, type LocacaoComInquilino } from '../lib/api'
 import { mensagemDeErro } from '../lib/erros'
 import { formatarData } from '../lib/format'
 import { primeiraMaiuscula } from '../lib/texto'
@@ -127,6 +127,8 @@ function FormDocumento({ imovelId, locacoes, aoFechar, aoSalvar }: {
   const [preparando, setPreparando] = useState(false)
   const [reducao, setReducao] = useState<string | null>(null)
   const entrada = useRef<HTMLInputElement>(null)
+  const { dados: uso } = useCarregar(usoArmazenamento, [])
+  const livre = uso ? Math.max(0, uso.meu_limite - uso.meus_bytes) : null
 
   /** Fotos são reduzidas antes de enviar (economiza o espaço do plano gratuito). */
   async function escolher(f: File | null) {
@@ -186,6 +188,12 @@ function FormDocumento({ imovelId, locacoes, aoFechar, aoSalvar }: {
           )}
         </div>
         {reducao && <p className="alerta alerta--ok">{reducao}</p>}
+        {uso && (
+          <p className={`texto-pequeno paragrafo ${livre! <= 0 || (arquivo && arquivo.size > livre!) ? 'texto-erro' : 'texto-suave'}`}>
+            Seu espaço: {tamanhoLegivel(uso.meus_bytes)} usados de {tamanhoLegivel(uso.meu_limite)} · restam {tamanhoLegivel(livre!)}.
+            {arquivo && arquivo.size > livre! ? ' Este arquivo não cabe: exclua documentos antigos ou peça mais espaço ao suporte.' : ''}
+          </p>
+        )}
         <div className="grade-2">
           <Campo rotulo="Tipo">
             <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoDocumento)}>

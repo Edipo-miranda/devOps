@@ -122,6 +122,14 @@ export function VerificacaoPage() {
         : { nome: 'Espaço usado pelos documentos (script 0009)', estado: 'ok' },
     )
 
+    // Limite de documentos por usuário (0010). Só leitura.
+    const { data: limite, error: erroLimite } = await supabase.rpc('meu_limite_documentos')
+    resultados.push(
+      erroLimite
+        ? { nome: 'Limite de documentos por usuário (script 0010)', estado: 'erro', detalhe: mensagemDeErro(erroLimite) }
+        : { nome: 'Limite de documentos por usuário (script 0010)', estado: 'ok', detalhe: `Seu limite: ${Math.round(Number(limite) / 1048576)} MB` },
+    )
+
     return resultados
   }, [])
 

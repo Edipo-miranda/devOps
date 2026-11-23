@@ -639,13 +639,26 @@ export async function enviarDocumento(
   if (!uid) throw new Error('Sessão expirada. Entre novamente.')
   const seguro = arquivo.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-80)
   const caminho = `${uid}/${dados.imovel_id}/${crypto.randomUUID()}-${seguro}`
+  // Confere o espaço antes de enviar (o banco também recusa, script 0010).
+  const uso = await usoArmazenamento().catch(() => null) // sem o script 0009, segue sem a conferência
+  if (uso && uso.meus_bytes + arquivo.size > uso.meu_limite) throw new Error(mensagemEspacoEsgotado(uso, arquivo.size))
   const envio = await supabase.storage.from(PASTA).upload(caminho, arquivo, { contentType: arquivo.type || undefined, upsert: false })
-  if (envio.error) throw envio.error
+  if (envio.error) {
+    if (uso && /row-level security|violates|unauthorized|403/i.test(envio.error.message)) throw new Error(mensagemEspacoEsgotado(uso, arquivo.size))
+    throw envio.error
+  }
   const { error } = await supabase.from('documentos').insert({ ...dados, caminho, tamanho: arquivo.size, mime: arquivo.type || null })
   if (error) {
     await supabase.storage.from(PASTA).remove([caminho]) // não deixa arquivo órfão
     throw error
   }
+}
+
+function mensagemEspacoEsgotado(uso: UsoArmazenamento, tamanho: number): string {
+  const mb = (b: number) => (b / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+  const livre = Math.max(0, uso.meu_limite - uso.meus_bytes)
+  return `Seu espaço para documentos não é suficiente: você usou ${mb(uso.meus_bytes)} MB de ${mb(uso.meu_limite)} MB `
+    + `e restam ${mb(livre)} MB (este arquivo tem ${mb(tamanho)} MB). Exclua documentos antigos ou peça mais espaço ao suporte.`
 }
 
 /** Link temporário (5 minutos) para abrir/baixar um documento privado. */
@@ -680,13 +693,20 @@ export interface UsoArmazenamento {
   meus_arquivos: number
   total_bytes: number
   total_arquivos: number
+  meu_limite: number // limite do usuário em bytes (padrão 100 MB, script 0010)
 }
+
+export const LIMITE_PADRAO_DOCUMENTOS = 100 * 1024 * 1024
 
 /** Espaço ocupado pelos documentos: do usuário e do sistema inteiro (limite gratuito: 1 GB no total). */
 export async function usoArmazenamento(): Promise<UsoArmazenamento> {
   const { data, error } = await supabase.rpc('uso_armazenamento')
   if (error) throw error
   const l = Array.isArray(data) ? (data[0] as UsoArmazenamento | undefined) : undefined
-  if (!l) return { meus_bytes: 0, meus_arquivos: 0, total_bytes: 0, total_arquivos: 0 }
-  return { meus_bytes: Number(l.meus_bytes), meus_arquivos: Number(l.meus_arquivos), total_bytes: Number(l.total_bytes), total_arquivos: Number(l.total_arquivos) }
+  if (!l) return { meus_bytes: 0, meus_arquivos: 0, total_bytes: 0, total_arquivos: 0, meu_limite: LIMITE_PADRAO_DOCUMENTOS }
+  return {
+    meus_bytes: Number(l.meus_bytes), meus_arquivos: Number(l.meus_arquivos),
+    total_bytes: Number(l.total_bytes), total_arquivos: Number(l.total_arquivos),
+    meu_limite: Number(l.meu_limite) || LIMITE_PADRAO_DOCUMENTOS,
+  }
 }
