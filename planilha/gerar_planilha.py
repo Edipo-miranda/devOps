@@ -16,6 +16,7 @@ from openpyxl.formatting.rule import DataBarRule, FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.protection import SheetProtection
+from openpyxl.utils import get_column_letter as L_
 
 PASTA = Path(__file__).parent
 SAIDA = PASTA / 'Controle-de-Alugueis.xlsx'
@@ -36,7 +37,7 @@ F_MOEDA = '"R$" #,##0.00;[Red]-"R$" #,##0.00;"-"'
 
 # ----------------------------------------------------------------- faixas (cabeçalho na linha 7, dados a partir da 8)
 CAB = 7
-PR, IM, INQ, CT, PG, DP = (8, 57), (8, 107), (8, 207), (8, 107), (8, 3007), (8, 2007)
+PR, IM, INQ, CT, PG, DP, RJ = (8, 57), (8, 107), (8, 207), (8, 107), (8, 3007), (8, 2007), (8, 507)
 AM0 = 9  # Aluguéis do Mês: linha 9 espelha Contratos linha 8
 
 MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -52,6 +53,7 @@ LISTAS = {
 MENU = [('📊  Painel', 'Painel'), ('📅  Aluguéis do mês', 'Aluguéis do Mês'), ('⚠️  Em aberto', 'Em aberto'),
         ('🧾  Extrato do inquilino', 'Extrato'), ('💰  Pagamentos', 'Pagamentos'), ('📄  Contratos', 'Contratos'),
         ('🏠  Imóveis', 'Imóveis'), ('👤  Inquilinos', 'Inquilinos'), ('🤝  Proprietários', 'Proprietários'),
+        ('🔁  Reajustes', 'Reajustes'), ('🧮  Calcular reajuste', 'Calcular reajuste'), ('📝  Gerar contrato', 'Gerar contrato'),
         ('💸  Despesas', 'Despesas'), ('📈  Relatório IR', 'Relatório IR'), ('🖨️  Recibo', 'Recibo'), ('❓  Como usar', 'Como usar')]
 
 # células auxiliares na aba Listas
@@ -140,6 +142,48 @@ def link_whats(fone, texto, texto_curto):
 
 def data_txt(d):
     return f'TEXT(DAY({d}),"00")&"/"&TEXT(MONTH({d}),"00")&"/"&YEAR({d})'
+
+
+def valor_em(cod, data, vini, estrito=False):
+    """Valor do aluguel vigente numa data: o do último reajuste até a data (aba Reajustes) ou o valor inicial."""
+    op = '<' if estrito else '<='
+    d0 = f'_xlfn.MAXIFS({rng("Reajustes", "D", RJ)},{rng("Reajustes", "E", RJ)},{cod},{rng("Reajustes", "D", RJ)},"{op}"&{data})'
+    return f'IF({d0}=0,{vini},SUMIFS({rng("Reajustes", "H", RJ)},{rng("Reajustes", "E", RJ)},{cod},{rng("Reajustes", "D", RJ)},{d0}))'
+
+
+def nvenc(desde, ate, dia):
+    """Quantos vencimentos (todo dia `dia`) a partir de `desde` já passaram até `ate` (vencimento no próprio dia não conta)."""
+    prim = f'DATE(YEAR({desde}),MONTH({desde}),MIN({dia},DAY(EOMONTH({desde},0))))'
+    prim2 = f'IF({prim}<{desde},DATE(YEAR({desde}),MONTH({desde})+1,MIN({dia},DAY(EOMONTH({desde},1)))),{prim})'
+    return (f'MAX(0,(YEAR({ate})*12+MONTH({ate}))-(YEAR({prim2})*12+MONTH({prim2}))'
+            f'+IF(DAY({ate})>MIN({dia},DAY(EOMONTH({ate},0))),1,0))')
+
+
+def pal(ref):
+    return f'INDEX(Listas!$X$1:$X$1000,{ref}+1)'
+
+
+def ext(v):
+    """Valor por extenso (até R$ 999.999,99) só com fórmulas."""
+    i, c = f'INT(ROUND({v},2))', f'ROUND(({v}-INT(ROUND({v},2)))*100,0)'
+    t, u = f'INT({i}/1000)', f'MOD({i},1000)'
+    return (f'IF({i}>=1000000,"",IF({i}=0,"",IF({t}>0,IF({t}=1,"mil",{pal(t)}&" mil"),"")'
+            f'&IF(AND({t}>0,{u}>0),IF(OR({u}<100,MOD({u},100)=0)," e "," "),"")&IF({u}>0,{pal(u)},"")'
+            f'&IF({i}=1," real"," reais"))&IF({c}>0,IF({i}>0," e ","")&{pal(c)}&IF({c}=1," centavo"," centavos"),""))')
+
+
+class F(str):
+    """Trecho de fórmula (o resto é texto fixo)."""
+
+
+def lit(texto):
+    texto = texto.replace('"', '""')
+    partes = [texto[i:i + 240] for i in range(0, len(texto), 240)] or ['']
+    return '&'.join(f'"{p}"' for p in partes)
+
+
+def cat(*partes):
+    return '&'.join(p if isinstance(p, F) else lit(p) for p in partes if p != '')
 
 
 def por_extenso(n):
@@ -294,12 +338,14 @@ ls.sheet_state = 'hidden'
 
 # ----------------------------------------------------------------- Proprietários
 pr = wb.create_sheet('Proprietários')
-layout(pr, 'Proprietários', 'Proprietários', 'Donos dos imóveis: aparecem no recibo e no relatório de Imposto de Renda.', PR[1], 10)
+layout(pr, 'Proprietários', 'Proprietários', 'Donos dos imóveis: aparecem no contrato, no recibo, na carta de reajuste e no relatório de IR.', PR[1], 15)
 legenda(pr)
-cabecalho(pr, CAB, [('D', 'Nome completo', 34), ('E', 'CPF / CNPJ', 20), ('F', 'Telefone', 18), ('G', 'Chave PIX', 30),
-                    ('H', 'Banco / agência / conta', 28), ('I', 'Observações', 30)])
-for letra in 'DEFGHI':
+cabecalho(pr, CAB, [('D', 'Nome completo', 32), ('E', 'CPF / CNPJ', 18), ('F', 'RG (e órgão)', 15), ('G', 'Nacionalidade', 13),
+                    ('H', 'Estado civil', 14), ('I', 'Profissão', 16), ('J', 'Endereço completo', 40), ('K', 'Telefone', 16),
+                    ('L', 'Chave PIX', 26), ('M', 'Banco / agência / conta', 24), ('N', 'Observações', 26)])
+for letra in 'DEFGHIJKLMN':
     coluna(pr, letra, PR, True)
+lista(pr, col_lista['civil'], f'H{PR[0]}:H{PR[1]}')
 pr.freeze_panes = f'E{PR[0]}'
 
 # ----------------------------------------------------------------- Imóveis
@@ -315,7 +361,7 @@ coluna(im, 'M', IM, True, F_MOEDA)
 coluna(im, 'N', IM, True, F_MOEDA)
 coluna(im, 'O', IM, False, alinhar='center')
 for r in range(IM[0], IM[1] + 1):
-    im[f'O{r}'] = f'=IF(D{r}="","",IF(COUNTIFS({rng("Contratos", "D", CT)},D{r},{rng("Contratos", "S", CT)},"Ativo")>0,"Alugado","Vago"))'
+    im[f'O{r}'] = f'=IF(D{r}="","",IF(COUNTIFS({rng("Contratos", "D", CT)},D{r},{rng("Contratos", "T", CT)},"Ativo")>0,"Alugado","Vago"))'
 im.conditional_formatting.add(f'O{IM[0]}:O{IM[1]}', FormulaRule(formula=[f'O{IM[0]}="Alugado"'], fill=PatternFill('solid', fgColor='DCFCE7'), font=Font(name=FONTE, bold=True, color='15803D')))
 im.conditional_formatting.add(f'O{IM[0]}:O{IM[1]}', FormulaRule(formula=[f'O{IM[0]}="Vago"'], fill=PatternFill('solid', fgColor='FEF3C7'), font=Font(name=FONTE, bold=True, color='B45309')))
 lista(im, col_lista['tipos'], f'E{IM[0]}:E{IM[1]}')
@@ -328,64 +374,94 @@ im.freeze_panes = f'E{IM[0]}'
 
 # ----------------------------------------------------------------- Inquilinos
 iq = wb.create_sheet('Inquilinos')
-layout(iq, 'Inquilinos', 'Inquilinos', 'WhatsApp: só números com DDD (ex.: 43999998888), para os botões de cobrança funcionarem.', INQ[1], 12)
+layout(iq, 'Inquilinos', 'Inquilinos', 'WhatsApp: só números com DDD (ex.: 43999998888), para os botões de cobrança funcionarem.', INQ[1], 14)
 legenda(iq)
-cabecalho(iq, CAB, [('D', 'Nome completo', 32), ('E', 'CPF', 16), ('F', 'RG', 14), ('G', 'WhatsApp (só números com DDD)', 20),
-                    ('H', 'E-mail', 28), ('I', 'Estado civil', 15), ('J', 'Profissão', 18), ('K', 'Observações', 30)])
-for letra in 'DEFGHIJK':
+cabecalho(iq, CAB, [('D', 'Nome completo', 32), ('E', 'CPF', 16), ('F', 'RG (e órgão)', 14), ('G', 'WhatsApp (só números com DDD)', 20),
+                    ('H', 'E-mail', 26), ('I', 'Estado civil', 14), ('J', 'Profissão', 16), ('K', 'Nacionalidade', 13),
+                    ('L', 'Endereço atual (antes de mudar)', 36), ('M', 'Observações', 26)])
+for letra in 'DEFGHIJKLM':
     coluna(iq, letra, INQ, True)
 lista(iq, col_lista['civil'], f'I{INQ[0]}:I{INQ[1]}')
 iq.freeze_panes = f'E{INQ[0]}'
 
 # ----------------------------------------------------------------- Contratos
 ct = wb.create_sheet('Contratos')
-layout(ct, 'Contratos', 'Contratos', 'Um contrato por locação. Para encerrar, preencha a data de saída (o histórico continua).', CT[1], 22)
+layout(ct, 'Contratos', 'Contratos', 'Um contrato por locação. Reajustes vão na aba Reajustes. Para encerrar, preencha a data de saída.', CT[1], 23)
 legenda(ct)
 cabecalho(ct, CAB, [('D', 'Imóvel', 22), ('E', 'Inquilino', 24), ('F', 'Início do contrato', 11), ('G', 'Prazo (meses)', 8),
-                    ('H', 'Fim do contrato', 11), ('I', 'Valor do aluguel', 12), ('J', 'Dia do venci-mento', 8),
-                    ('K', 'Reajuste a cada (meses)', 9), ('L', 'Índice de reajuste', 13), ('M', 'Último reajuste (data)', 11),
-                    ('N', 'Próximo reajuste', 11), ('O', 'Multa por atraso', 8), ('P', 'Juros ao mês', 8),
-                    ('Q', 'Data de saída (encerrou)', 11), ('R', 'Código do contrato', 32), ('S', 'Situação', 10),
-                    ('T', 'Aviso', 28), ('U', 'Saldo em aberto', 12)])
-for letra, fmt in [('D', None), ('E', None), ('F', F_DATA), ('G', '0'), ('I', F_MOEDA), ('J', '0'), ('K', '0'), ('L', None),
-                   ('M', F_DATA), ('O', F_PCT), ('P', F_PCT), ('Q', F_DATA)]:
+                    ('H', 'Fim do contrato', 11), ('I', 'Valor inicial do aluguel', 12), ('J', 'Valor atual (após reajustes)', 12),
+                    ('K', 'Dia do venci-mento', 8), ('L', 'Reajuste a cada (meses)', 9), ('M', 'Índice de reajuste', 13),
+                    ('N', 'Último reajuste', 11), ('O', 'Próximo reajuste', 11), ('P', 'Multa por atraso', 8), ('Q', 'Juros ao mês', 8),
+                    ('R', 'Data de saída (encerrou)', 11), ('S', 'Código do contrato', 32), ('T', 'Situação', 10),
+                    ('U', 'Aviso', 28), ('V', 'Saldo em aberto', 12)])
+for letra, fmt in [('D', None), ('E', None), ('F', F_DATA), ('G', '0'), ('I', F_MOEDA), ('K', '0'), ('L', '0'), ('M', None),
+                   ('P', F_PCT), ('Q', F_PCT), ('R', F_DATA)]:
     coluna(ct, letra, CT, True, fmt)
-for letra, fmt in [('H', F_DATA), ('N', F_DATA), ('R', None), ('S', None), ('T', None), ('U', F_MOEDA)]:
+for letra, fmt in [('H', F_DATA), ('J', F_MOEDA), ('N', F_DATA), ('O', F_DATA), ('S', None), ('T', None), ('U', None), ('V', F_MOEDA)]:
     coluna(ct, letra, CT, False, fmt)
-for letra in 'VWXYZ':
+for letra in 'WXYZ':
     ct.column_dimensions[letra].hidden = True
+RJD, RJE, RJH, RJM = (rng('Reajustes', c, RJ) for c in 'DEHM')
 for r in range(CT[0], CT[1] + 1):
+    ult = f'_xlfn.MAXIFS({RJD},{RJE},S{r})'
     ct[f'H{r}'] = f'=IF(OR(F{r}="",G{r}=""),"",EDATE(F{r},G{r})-1)'
-    ct[f'N{r}'] = f'=IF(OR(F{r}="",K{r}=""),"",EDATE(IF(M{r}="",F{r},M{r}),K{r}))'
-    ct[f'R{r}'] = f'=IF(OR(D{r}="",E{r}=""),"",D{r}&" | "&E{r})'
-    ct[f'S{r}'] = f'=IF(R{r}="","",IF(AND(Q{r}<>"",Q{r}<=TODAY()),"Encerrado","Ativo"))'
-    ct[f'T{r}'] = (f'=IF(S{r}<>"Ativo","",IF(AND(H{r}<>"",H{r}<TODAY()),"Contrato venceu: renove ou encerre",'
+    ct[f'J{r}'] = f'=IF(S{r}="","",IF({ult}=0,I{r},SUMIFS({RJH},{RJE},S{r},{RJD},{ult})))'
+    ct[f'N{r}'] = f'=IF(S{r}="","",IF({ult}=0,"",{ult}))'
+    ct[f'O{r}'] = f'=IF(OR(F{r}="",L{r}=""),"",EDATE(IF(N{r}="",F{r},N{r}),L{r}))'
+    ct[f'S{r}'] = f'=IF(OR(D{r}="",E{r}=""),"",D{r}&" | "&E{r})'
+    ct[f'T{r}'] = f'=IF(S{r}="","",IF(AND(R{r}<>"",R{r}<=TODAY()),"Encerrado","Ativo"))'
+    ct[f'U{r}'] = (f'=IF(T{r}<>"Ativo","",IF(AND(H{r}<>"",H{r}<TODAY()),"Contrato venceu: renove ou encerre",'
                    f'IF(AND(H{r}<>"",H{r}-TODAY()<=60),"Contrato termina em "&(H{r}-TODAY())&" dias",'
-                   f'IF(AND(N{r}<>"",N{r}<=TODAY()),"Reajuste vencido ("&L{r}&")",'
-                   f'IF(AND(N{r}<>"",N{r}-TODAY()<=60),"Reajuste em "&(N{r}-TODAY())&" dias ("&L{r}&")","")))))')
-    # Saldo em aberto: vencimentos desde o início (ou o último reajuste) até hoje x valor, menos o que foi pago.
-    base = f'IF(M{r}="",F{r},MAX(F{r},M{r}))'
-    v1 = f'DATE(YEAR({base}),MONTH({base}),MIN(J{r},28))'
-    ct[f'V{r}'] = f'=IF(OR(R{r}="",F{r}="",J{r}=""),"",IF({v1}<{base},EDATE({v1},1),{v1}))'
-    fimc = f'IF(Q{r}="",TODAY(),MIN(Q{r},TODAY()))'
-    ct[f'W{r}'] = (f'=IF(V{r}="","",IF({fimc}<=V{r},0,(YEAR({fimc})-YEAR(V{r}))*12+MONTH({fimc})-MONTH(V{r})'
-                   f'+IF(DAY({fimc})>DAY(V{r}),1,0))*N(I{r}))')
-    ct[f'X{r}'] = (f'=IF(V{r}="","",SUMIFS({rng("Pagamentos", "G", PG)},{rng("Pagamentos", "E", PG)},R{r},'
-                   f'{rng("Pagamentos", "F", PG)},">="&DATE(YEAR(V{r}),MONTH(V{r}),1)))')
-    ct[f'U{r}'] = f'=IF(V{r}="","",MAX(0,W{r}-X{r}))'
-    ct[f'Y{r}'] = f'=IF(N(U{r})>0,U{r}+ROW()/1000000,"")'
-    ct[f'Z{r}'] = f'=IF(T{r}<>"",ROW(),"")'
+                   f'IF(AND(O{r}<>"",O{r}<=TODAY()),"Reajuste vencido ("&M{r}&")",'
+                   f'IF(AND(O{r}<>"",O{r}-TODAY()<=60),"Reajuste em "&(O{r}-TODAY())&" dias ("&M{r}&")","")))))')
+    # Saldo em aberto: vencimentos já passados x valor (com os reajustes do histórico) − tudo o que foi pago.
+    fimc = f'IF(R{r}="",TODAY(),MIN(R{r},TODAY()))'
+    ct[f'W{r}'] = f'=IF(OR(S{r}="",F{r}="",K{r}=""),"",N(I{r})*{nvenc(f"F{r}", fimc, f"K{r}")}+SUMIFS({RJM},{RJE},S{r}))'
+    ct[f'X{r}'] = f'=IF(W{r}="","",SUMIFS({rng("Pagamentos", "G", PG)},{rng("Pagamentos", "E", PG)},S{r}))'
+    ct[f'V{r}'] = f'=IF(W{r}="","",MAX(0,ROUND(W{r}-X{r},2)))'
+    ct[f'Y{r}'] = f'=IF(N(V{r})>0,V{r}+ROW()/1000000,"")'
+    ct[f'Z{r}'] = f'=IF(U{r}<>"",ROW(),"")'
 lista(ct, rng('Imóveis', 'D', IM), f'D{CT[0]}:D{CT[1]}', 'Escolha um imóvel cadastrado na aba Imóveis.')
 lista(ct, rng('Inquilinos', 'D', INQ), f'E{CT[0]}:E{CT[1]}', 'Escolha um inquilino cadastrado na aba Inquilinos.')
-lista(ct, col_lista['indices'], f'L{CT[0]}:L{CT[1]}')
+lista(ct, col_lista['indices'], f'M{CT[0]}:M{CT[1]}')
 dvd = DataValidation(type='whole', operator='between', formula1='1', formula2='31', showErrorMessage=True, error='Informe um dia de 1 a 31.')
 ct.add_data_validation(dvd)
-dvd.add(f'J{CT[0]}:J{CT[1]}')
-ct.conditional_formatting.add(f'T{CT[0]}:T{CT[1]}', FormulaRule(formula=[f'LEN(T{CT[0]})>0'], fill=PatternFill('solid', fgColor='FEF3C7'),
+dvd.add(f'K{CT[0]}:K{CT[1]}')
+ct.conditional_formatting.add(f'U{CT[0]}:U{CT[1]}', FormulaRule(formula=[f'LEN(U{CT[0]})>0'], fill=PatternFill('solid', fgColor='FEF3C7'),
                                                                   font=Font(name=FONTE, bold=True, color='B45309')))
-ct.conditional_formatting.add(f'U{CT[0]}:U{CT[1]}', FormulaRule(formula=[f'N(U{CT[0]})>0'], font=Font(name=FONTE, bold=True, color='B91C1C')))
-ct.conditional_formatting.add(f'S{CT[0]}:S{CT[1]}', FormulaRule(formula=[f'S{CT[0]}="Encerrado"'], font=Font(name=FONTE, color=SUAVE)))
+ct.conditional_formatting.add(f'V{CT[0]}:V{CT[1]}', FormulaRule(formula=[f'N(V{CT[0]})>0'], font=Font(name=FONTE, bold=True, color='B91C1C')))
+ct.conditional_formatting.add(f'T{CT[0]}:T{CT[1]}', FormulaRule(formula=[f'T{CT[0]}="Encerrado"'], font=Font(name=FONTE, color=SUAVE)))
 ct.freeze_panes = f'F{CT[0]}'
+
+# ----------------------------------------------------------------- Reajustes (histórico)
+rj = wb.create_sheet('Reajustes')
+layout(rj, 'Reajustes', 'Histórico de reajustes', 'Lance cada reajuste aqui. O novo valor vale a partir do primeiro vencimento na data do reajuste ou depois.', RJ[1], 14)
+legenda(rj)
+rj['H5'] = '=HYPERLINK("#' + q('Calcular reajuste') + '!A1","🧮 Calcular o novo valor e gerar a carta →")'
+rj['H5'].font = fonte(size=9, bold=True, color=VERDE, underline='single')
+cabecalho(rj, CAB, [('D', 'Data do reajuste', 12), ('E', 'Contrato', 34), ('F', 'Índice usado', 14), ('G', 'Variação aplicada (%)', 11),
+                    ('H', 'Novo valor do aluguel', 14), ('I', 'Valor anterior', 13), ('J', 'Aumento', 12), ('K', 'Conferência', 20)])
+for letra, fmt in [('D', F_DATA), ('E', None), ('F', None), ('G', F_PCT), ('H', F_MOEDA)]:
+    coluna(rj, letra, RJ, True, fmt)
+for letra, fmt in [('I', F_MOEDA), ('J', F_MOEDA), ('K', None)]:
+    coluna(rj, letra, RJ, False, fmt)
+for letra in 'LM':
+    rj.column_dimensions[letra].hidden = True
+CTX = lambda col, pos: f'INDEX({rng("Contratos", col, CT)},{pos})'  # noqa: E731
+for r in range(RJ[0], RJ[1] + 1):
+    rj[f'L{r}'] = f'=IF(E{r}="","",IFERROR(MATCH(E{r},{rng("Contratos", "S", CT)},0),""))'
+    rj[f'I{r}'] = f'=IF(OR(D{r}="",L{r}=""),"",{valor_em(f"E{r}", f"D{r}", CTX("I", f"L{r}"), estrito=True)})'
+    rj[f'J{r}'] = f'=IF(OR(H{r}="",I{r}=""),"",H{r}-I{r})'
+    saida = CTX('R', f'L{r}')
+    fimc = f'IF({saida}="",TODAY(),MIN({saida},TODAY()))'
+    rj[f'M{r}'] = f'=IF(OR(J{r}="",L{r}=""),0,J{r}*{nvenc(f"D{r}", fimc, CTX("K", f"L{r}"))})'
+    rj[f'K{r}'] = (f'=IF(OR(D{r}="",E{r}=""),"",IF(L{r}="","⚠ Contrato não encontrado",IF(COUNTIFS($E${RJ[0]}:$E${RJ[1]},E{r},'
+                   f'$D${RJ[0]}:$D${RJ[1]},D{r})>1,"⚠ Lançado 2 vezes","✓")))')
+rj.conditional_formatting.add(f'K{RJ[0]}:K{RJ[1]}', FormulaRule(formula=[f'LEFT(K{RJ[0]},1)="⚠"'], fill=PatternFill('solid', fgColor='FEE2E2'),
+                                                                  font=Font(name=FONTE, bold=True, color='B91C1C')))
+lista(rj, rng('Contratos', 'S', CT), f'E{RJ[0]}:E{RJ[1]}', 'Escolha um contrato da aba Contratos.')
+lista(rj, col_lista['indices'], f'F{RJ[0]}:F{RJ[1]}')
+rj.freeze_panes = f'E{RJ[0]}'
 
 # ----------------------------------------------------------------- Pagamentos
 pg = wb.create_sheet('Pagamentos')
@@ -400,7 +476,7 @@ for letra, fmt in [('I', F_MOEDA), ('L', None), ('M', None), ('N', None), ('O', 
     coluna(pg, letra, PG, False, fmt)
 for r in range(PG[0], PG[1] + 1):
     pg[f'I{r}'] = f'=IF(AND(G{r}="",H{r}=""),"",N(G{r})+N(H{r}))'
-    pos = f'MATCH(E{r},{rng("Contratos", "R", CT)},0)'
+    pos = f'MATCH(E{r},{rng("Contratos", "S", CT)},0)'
     pg[f'L{r}'] = f'=IF(E{r}="","",IFERROR(INDEX({rng("Contratos", "D", CT)},{pos}),"?"))'
     pg[f'M{r}'] = f'=IF(E{r}="","",IFERROR(INDEX({rng("Contratos", "E", CT)},{pos}),"?"))'
     pg[f'N{r}'] = f'=IF(E{r}="","",IFERROR(INDEX({rng("Imóveis", "K", IM)},MATCH(L{r},{rng("Imóveis", "D", IM)},0)),""))'
@@ -447,22 +523,22 @@ for letra in 'RSTUVWXYZ':
 for i in range(n_ct):
     r, c = AM0 + i, CT[0] + i
     C = lambda col: f"{q('Contratos')}!${col}${c}"  # noqa: E731
-    am[f'R{r}'] = f'=IF(AND({C("R")}<>"",{C("F")}<>"",{C("F")}<={FIM},OR({C("Q")}="",{C("Q")}>={INI})),1,0)'
+    am[f'R{r}'] = f'=IF(AND({C("S")}<>"",{C("F")}<>"",{C("F")}<={FIM},OR({C("R")}="",{C("R")}>={INI})),1,0)'
     am[f'D{r}'] = f'=IF($R{r}=1,{C("D")},"")'
     am[f'E{r}'] = f'=IF($R{r}=1,{C("E")},"")'
-    am[f'F{r}'] = f'=IF($R{r}=1,DATE({ANO},{MES_N},MIN(N({C("J")})+(N({C("J")})=0),DAY({FIM}))),"")'
-    am[f'G{r}'] = f'=IF($R{r}=1,N({C("I")}),"")'
-    soma = (f'SUMIFS({rng("Pagamentos", "G", PG)},{rng("Pagamentos", "E", PG)},{C("R")},{rng("Pagamentos", "F", PG)},">="&{INI},'
+    am[f'F{r}'] = f'=IF($R{r}=1,DATE({ANO},{MES_N},MIN(N({C("K")})+(N({C("K")})=0),DAY({FIM}))),"")'
+    am[f'G{r}'] = f'=IF($R{r}=1,{valor_em(C("S"), f"F{r}", f"N({C(chr(73))})")},"")'
+    soma = (f'SUMIFS({rng("Pagamentos", "G", PG)},{rng("Pagamentos", "E", PG)},{C("S")},{rng("Pagamentos", "F", PG)},">="&{INI},'
             f'{rng("Pagamentos", "F", PG)},"<="&{FIM})')
     am[f'H{r}'] = f'=IF($R{r}=1,{soma},"")'
-    ultima = (f'_xlfn.MAXIFS({rng("Pagamentos", "D", PG)},{rng("Pagamentos", "E", PG)},{C("R")},{rng("Pagamentos", "F", PG)},">="&{INI},'
+    ultima = (f'_xlfn.MAXIFS({rng("Pagamentos", "D", PG)},{rng("Pagamentos", "E", PG)},{C("S")},{rng("Pagamentos", "F", PG)},">="&{INI},'
               f'{rng("Pagamentos", "F", PG)},"<="&{FIM})')
     am[f'I{r}'] = f'=IF($R{r}<>1,"",IF(H{r}>0,{ultima},""))'
     am[f'K{r}'] = f'=IF($R{r}<>1,"",IF(H{r}>=G{r},"Pago",IF(TODAY()>F{r},"Atrasado",IF(H{r}>0,"Parcial","Em aberto"))))'
     am[f'J{r}'] = f'={icone(f"K{r}")}'
     am[f'L{r}'] = f'=IF(K{r}="Atrasado",TODAY()-F{r},"")'
     falta = f'(G{r}-H{r})'
-    am[f'M{r}'] = f'=IF(K{r}="Atrasado",ROUND({falta}*N({C("O")}),2)+ROUND({falta}*N({C("P")})/30*L{r},2),"")'
+    am[f'M{r}'] = f'=IF(K{r}="Atrasado",ROUND({falta}*N({C("P")}),2)+ROUND({falta}*N({C("Q")})/30*L{r},2),"")'
     am[f'N{r}'] = f'=IF(K{r}="Atrasado",{falta}+M{r},"")'
     am[f'S{r}'] = f'=IF($R{r}<>1,"",IFERROR(INDEX({rng("Inquilinos", "G", INQ)},MATCH(E{r},{rng("Inquilinos", "D", INQ)},0))&"",""))'
     nome = f'LEFT(E{r},FIND(" ",E{r}&" ")-1)'
@@ -496,7 +572,7 @@ ea = wb.create_sheet('Em aberto')
 E0 = 9
 fim_ea = E0 + n_ct - 1
 layout(ea, 'Em aberto', 'Em aberto', 'Quem está devendo, somando TODOS os meses (desde o início do contrato ou do último reajuste).', fim_ea, 12, cabecalhos=False)
-ea['D5'] = f'="Total em aberto: R$ "&FIXED(SUM({rng("Contratos", "U", CT)}),2)&"   ·   "&COUNTIF({rng("Contratos", "U", CT)},">0")&" contrato(s)"'
+ea['D5'] = f'="Total em aberto: R$ "&FIXED(SUM({rng("Contratos", "V", CT)}),2)&"   ·   "&COUNTIF({rng("Contratos", "V", CT)},">0")&" contrato(s)"'
 ea['D5'].font = fonte(bold=True, size=13, color='B91C1C')
 cabecalho(ea, E0 - 1, [('D', 'Inquilino', 26), ('E', 'Imóvel', 22), ('F', 'Valor do aluguel', 13), ('G', 'Meses em aberto (aprox.)', 11),
                        ('H', 'Saldo em aberto', 16), ('I', 'Cobrar o total', 14)])
@@ -509,8 +585,8 @@ for k in range(n_ct):
     pega = lambda col: f'IF($R{r}="","",INDEX({rng("Contratos", col, CT)},$R{r}))'  # noqa: E731
     ea[f'D{r}'] = f'={pega("E")}'
     ea[f'E{r}'] = f'={pega("D")}'
-    ea[f'F{r}'] = f'={pega("I")}'
-    ea[f'H{r}'] = f'={pega("U")}'
+    ea[f'F{r}'] = f'={pega("J")}'
+    ea[f'H{r}'] = f'={pega("V")}'
     ea[f'G{r}'] = f'=IF(OR($R{r}="",N(F{r})=0),"",ROUNDUP(H{r}/F{r},0))'
     ea[f'S{r}'] = f'=IF($R{r}="","",IFERROR(INDEX({rng("Inquilinos", "G", INQ)},MATCH(D{r},{rng("Inquilinos", "D", INQ)},0))&"",""))'
     nome = f'LEFT(D{r},FIND(" ",D{r}&" ")-1)'
@@ -546,12 +622,12 @@ for col, w in zip('DEFGHIJ', [16, 13, 13, 13, 13, 5, 12]):
     ex.column_dimensions[col].width = w
 for letra in 'RS':
     ex.column_dimensions[letra].hidden = True
-ex['R1'] = f'=IFERROR(MATCH($E$5,{rng("Contratos", "R", CT)},0),"")'
+ex['R1'] = f'=IFERROR(MATCH($E$5,{rng("Contratos", "S", CT)},0),"")'
 P = lambda col: f'IF($R$1="","",INDEX({rng("Contratos", col, CT)},$R$1))'  # noqa: E731
 caixa(ex, 'D8:J12')
 info = [('D8', 'INQUILINO', f'={P("E")}', 'D9'), ('G8', 'IMÓVEL', f'={P("D")}', 'G9'),
-        ('D10', 'ALUGUEL', f'={P("I")}', 'D11'), ('F10', 'VENCIMENTO', f'=IF($R$1="","","Todo dia "&{P("J")})', 'F11'),
-        ('H10', 'SALDO EM ABERTO (TOTAL)', f'={P("U")}', 'H11')]
+        ('D10', 'ALUGUEL', f'={P("J")}', 'D11'), ('F10', 'VENCIMENTO', f'=IF($R$1="","","Todo dia "&{P("K")})', 'F11'),
+        ('H10', 'SALDO EM ABERTO (TOTAL)', f'={P("V")}', 'H11')]
 for rot_ref, rot, valor, val_ref in info:
     ex[rot_ref] = rot
     ex[rot_ref].font = fonte(size=8, bold=True, color=SUAVE)
@@ -563,11 +639,11 @@ cabecalho(ex, 14, [('D', 'Mês', 16), ('E', 'Vencimento', 13), ('F', 'Valor prev
 for m in range(12):
     r = 15 + m
     ini, fim = f'DATE($E$6,{m + 1},1)', f'EOMONTH(DATE($E$6,{m + 1},1),0)'
-    ativo = f'AND($R$1<>"",{P("F")}<>"",{P("F")}<={fim},OR({P("Q")}="",{P("Q")}>={ini}))'
+    ativo = f'AND($R$1<>"",{P("F")}<>"",{P("F")}<={fim},OR({P("R")}="",{P("R")}>={ini}))'
     ex[f'S{r}'] = f'=IF({ativo},1,0)'
     ex[f'D{r}'] = MESES[m]
-    ex[f'E{r}'] = f'=IF(S{r}=1,DATE($E$6,{m + 1},MIN({P("J")},DAY({fim}))),"")'
-    ex[f'F{r}'] = f'=IF(S{r}=1,{P("I")},"")'
+    ex[f'E{r}'] = f'=IF(S{r}=1,DATE($E$6,{m + 1},MIN({P("K")},DAY({fim}))),"")'
+    ex[f'F{r}'] = f'=IF(S{r}=1,{valor_em("$E$5", f"E{r}", P("I"))},"")'
     ex[f'G{r}'] = (f'=IF($R$1="","",SUMIFS({rng("Pagamentos", "G", PG)},{rng("Pagamentos", "E", PG)},$E$5,{rng("Pagamentos", "F", PG)},">="&{ini},'
                    f'{rng("Pagamentos", "F", PG)},"<="&{fim}))')
     ex[f'H{r}'] = (f'=IF(N(G{r})=0,"",_xlfn.MAXIFS({rng("Pagamentos", "D", PG)},{rng("Pagamentos", "E", PG)},$E$5,{rng("Pagamentos", "F", PG)},">="&{ini},'
@@ -680,7 +756,7 @@ rc['F6'] = 'digite assim: 11/2026'
 rc['F6'].font = fonte(size=9, italic=True, color=SUAVE)
 lista(rc, rng('Contratos', 'R', CT), 'E5')
 aux = {
-    'pos': f'=MATCH($E$5,{rng("Contratos", "R", CT)},0)',
+    'pos': f'=MATCH($E$5,{rng("Contratos", "S", CT)},0)',
     'imovel': f'=IFERROR(INDEX({rng("Contratos", "D", CT)},S2),"")',
     'inq': f'=IFERROR(INDEX({rng("Contratos", "E", CT)},S2),"")',
     'cpf': f'=IFERROR(INDEX({rng("Inquilinos", "E", INQ)},MATCH(S4,{rng("Inquilinos", "D", INQ)},0))&"","")',
@@ -749,6 +825,310 @@ rc.print_options.horizontalCentered = True
 destravar(rc, 'E5:H5', 'E6')
 proteger(rc)
 
+# ----------------------------------------------------------------- Calcular reajuste (+ carta)
+cr = wb.create_sheet('Calcular reajuste')
+layout(cr, 'Calcular reajuste', 'Calcular reajuste', 'Escolha o contrato e digite a variação do índice. O novo valor e a carta de reajuste saem prontos.', 48, 11, cabecalhos=False)
+for col in 'DEFGHI':
+    cr.column_dimensions[col].width = 17
+for ref, rot in [('D5', 'Contrato:'), ('D6', 'Índice:'), ('D7', 'Variação acumulada:'), ('D8', 'Data do reajuste:')]:
+    cr[ref] = rot
+    cr[ref].font = fonte(bold=True)
+    cr[ref].alignment = Alignment(horizontal='right', vertical='center')
+cr.merge_cells('E5:H5')
+for ref in ('E5', 'E6', 'E7', 'E8'):
+    seletor(cr, ref)
+lista(cr, rng('Contratos', 'S', CT), 'E5', 'Escolha um contrato da aba Contratos.')
+lista(cr, col_lista['indices'], 'E6')
+cr['E7'].number_format = F_PCT
+cr['E8'].number_format = F_DATA
+cr['S1'] = f'=IFERROR(MATCH($E$5,{rng("Contratos", "S", CT)},0),"")'
+Q_ = lambda col: f'IF($S$1="","",INDEX({rng("Contratos", col, CT)},$S$1))'  # noqa: E731
+cr['E6'] = f'={Q_("M")}'
+cr['E8'] = f'={Q_("O")}'
+cr['F6'] = 'vem do contrato (pode trocar)'
+cr['F7'] = 'digite o acumulado de 12 meses (ex.: 4,66%)'
+cr['F8'] = 'vem do contrato (pode trocar)'
+for ref in ('F6', 'F7', 'F8'):
+    cr[ref].font = fonte(size=9, italic=True, color=SUAVE)
+cr['D9'] = 'Onde achar o índice: Calculadora do Cidadão (Banco Central), IBGE (IPCA e INPC) ou FGV (IGP-M).'
+cr['D9'].font = fonte(size=9, italic=True, color=SUAVE)
+aux_cr = {
+    'imovel': f'={Q_("D")}', 'inq': f'={Q_("E")}', 'atual': f'={Q_("J")}', 'dia': f'={Q_("K")}',
+    'novo': '=IF(OR(S4="",$E$7=""),"",ROUND(S4*(1+$E$7),2))',
+    'vig': ('=IF(OR($E$8="",S5=""),"",IF(DATE(YEAR($E$8),MONTH($E$8),MIN(S5,DAY(EOMONTH($E$8,0))))<$E$8,'
+            'DATE(YEAR($E$8),MONTH($E$8)+1,1),DATE(YEAR($E$8),MONTH($E$8),1)))'),
+    'linha_im': f'=IFERROR(MATCH(S2,{rng("Imóveis", "D", IM)},0),0)',
+    'end': (f'=IF(S8=0,"",INDEX({rng("Imóveis", "F", IM)},S8)&" - "&INDEX({rng("Imóveis", "G", IM)},S8)&" - "'
+            f'&INDEX({rng("Imóveis", "H", IM)},S8)&"/"&INDEX({rng("Imóveis", "I", IM)},S8))'),
+    'cidade': f'=IF(S8=0,"",INDEX({rng("Imóveis", "H", IM)},S8)&"/"&INDEX({rng("Imóveis", "I", IM)},S8))',
+    'dono': f'=IF(S8=0,"",INDEX({rng("Imóveis", "K", IM)},S8)&"")',
+    'pct': '=IF($E$7="","",FIXED($E$7*100,2)&"%")',
+}
+for i, (k, f) in enumerate(aux_cr.items(), start=2):
+    cr[f'R{i}'], cr[f'S{i}'] = k, f
+for letra in 'RS':
+    cr.column_dimensions[letra].hidden = True
+# resultado
+caixa(cr, 'D11:I14')
+for ref, rot, val, fmt, cor in [('D11', 'VALOR ATUAL', '=S4', F_MOEDA, ESCURO), ('F11', 'NOVO VALOR', '=S6', F_MOEDA, VERDE_ESC),
+                                ('H11', 'AUMENTO', '=IF(S6="","",S6-S4)', F_MOEDA, LARANJA)]:
+    cr[ref] = rot
+    cr[ref].font = fonte(size=8, bold=True, color=SUAVE)
+    v = ref[0] + '12'
+    cr.merge_cells(f'{v}:{chr(ord(ref[0]) + 1)}12')
+    cr[v] = val
+    cr[v].font = fonte(size=18, bold=True, color=cor)
+    cr[v].number_format = fmt
+    cr[v].alignment = Alignment(horizontal='left', vertical='center')
+cr.row_dimensions[12].height = 30
+cr.merge_cells('D14:I14')
+cr['D14'] = '=IF(S6="","Escolha o contrato e digite a variação.","Vale a partir do vencimento de "&TEXT(MONTH(S7),"00")&"/"&YEAR(S7)&". Para registrar, lance na aba Reajustes: data, contrato, índice, variação e o novo valor (R$ "&FIXED(S6,2)&").")'
+cr['D14'].font = fonte(size=9, bold=True, color=VERDE_ESC)
+cr['D14'].alignment = Alignment(wrap_text=True, vertical='center')
+cr.row_dimensions[14].height = 30
+cr['D15'] = f'=HYPERLINK("#{q("Reajustes")}!A1","🔁 Ir para Reajustes e registrar →")'
+cr['D15'].font = fonte(size=9, bold=True, color=VERDE, underline='single')
+# carta
+cr['D17'] = 'Carta de reajuste (para imprimir: Arquivo → Imprimir)'
+cr['D17'].font = fonte(bold=True, size=12)
+caixa(cr, 'D18:I44')
+for col in 'DEFGHI':
+    cr[f'{col}18'].border = Border(top=Side('thick', color=VERDE_ESC))
+linhas_carta = [
+    (20, '="COMUNICADO DE REAJUSTE DE ALUGUEL"', fonte(size=14, bold=True), 'center', 22),
+    (22, '=IF(S2="","",S10&", "&DAY(TODAY())&" de "&LOWER(INDEX(Listas!$A$2:$A$13,MONTH(TODAY())))&" de "&YEAR(TODAY())&".")', fonte(), 'right', 18),
+    (24, '=IF(S3="","","Ao(À) Sr(a). "&UPPER(S3))', fonte(bold=True), 'left', 18),
+    (25, '=IF(S2="","","Ref.: reajuste do aluguel do imóvel situado à "&S9&".")', fonte(), 'left', 30),
+    (27, '=IF(S3="","","Prezado(a) "&LEFT(S3,FIND(" ",S3&" ")-1)&",")', fonte(), 'left', 18),
+    (28, ('=IF(S6="","","Conforme previsto no contrato de locação, informamos que o aluguel do imóvel acima será reajustado pela '
+          'variação acumulada do "&$E$6&" de "&S12&" no período, passando a valer a partir do vencimento de "&TEXT(MONTH(S7),"00")&"/"&YEAR(S7)&".")'),
+     fonte(), 'justify', 44),
+    (30, '=IF(S6="","","Valor atual: R$ "&FIXED(S4,2))', fonte(), 'left', 18),
+    (31, '=IF(S6="","","Novo valor: R$ "&FIXED(S6,2)&" ("&' + ext('S6') + '&")")', fonte(bold=True), 'left', 30),
+    (33, '=IF(S6="","","Os demais termos do contrato permanecem inalterados. Ficamos à disposição para qualquer esclarecimento.")', fonte(), 'left', 30),
+    (35, '=IF(S6="","","Atenciosamente,")', fonte(), 'left', 18),
+    (38, '=IF(S6="","",UPPER(S11))', fonte(bold=True), 'center', 18),
+    (39, '=IF(S6="","","Locador")', fonte(size=9, color=SUAVE), 'center', 16),
+    (42, '=IF(S6="","","Ciente: ____________________________________   Data: ____/____/________")', fonte(), 'left', 18),
+    (43, '=IF(S6="","",UPPER(S3)&" (locatário)")', fonte(size=9, color=SUAVE), 'left', 16),
+]
+for lin, f, fnt, al, alt in linhas_carta:
+    cr.merge_cells(f'E{lin}:H{lin}')
+    cr[f'E{lin}'] = f
+    cr[f'E{lin}'].font = fnt
+    cr[f'E{lin}'].alignment = Alignment(horizontal=al, vertical='top', wrap_text=True)
+    cr.row_dimensions[lin].height = alt
+for col in 'EFGH':
+    cr[f'{col}38'].border = Border(top=Side('thin', color=ESCURO))
+cr.print_area = 'D18:I44'
+cr.sheet_properties.pageSetUpPr.fitToPage = True
+cr.page_setup.fitToWidth = 1
+cr.print_options.horizontalCentered = True
+destravar(cr, 'E5:H5', 'E6', 'E7', 'E8')
+proteger(cr)
+
+# ----------------------------------------------------------------- Gerar contrato
+gc = wb.create_sheet('Gerar contrato')
+for col in 'DEFGHI':
+    gc.column_dimensions[col].width = 17
+campos = [('D5', 'Contrato:', 'E5'), ('D6', 'Finalidade:', 'E6'), ('D7', 'Garantia:', 'E7'), ('D8', 'Valor da garantia:', 'E8'),
+          ('D9', 'Fiador (nome):', 'E9'), ('D10', 'Fiador (CPF):', 'E10'), ('G6', 'IPTU por conta do:', 'H6'),
+          ('G7', 'Multa rescisória (aluguéis):', 'H7'), ('G8', 'Foro (cidade/UF):', 'H8'), ('G9', 'Cidade da assinatura:', 'H9'),
+          ('G10', 'Data da assinatura:', 'H10'), ('D11', 'Testemunha 1:', 'E11'), ('G11', 'Testemunha 2:', 'H11')]
+for rot_ref, rot, val in campos:
+    gc[rot_ref] = rot
+    gc[rot_ref].font = fonte(bold=True, size=9)
+    gc[rot_ref].alignment = Alignment(horizontal='right', vertical='center', wrap_text=True)
+GC_LISTAS = {'fin': ['Residencial', 'Comercial'], 'gar': ['Caução em dinheiro', 'Fiador', 'Seguro-fiança', 'Sem garantia'], 'iptu': ['Locador', 'Locatário']}
+for j, (k, itens) in enumerate(GC_LISTAS.items()):
+    letra = 'QRS'[j]
+    for i, v in enumerate(itens, start=2):
+        ls[f'{letra}{20 + i}'] = v
+lista(gc, 'Listas!$Q$22:$Q$23', 'E6')
+lista(gc, 'Listas!$R$22:$R$25', 'E7')
+lista(gc, 'Listas!$S$22:$S$23', 'H6')
+lista(gc, rng('Contratos', 'S', CT), 'E5', 'Escolha um contrato da aba Contratos.')
+gc.merge_cells('E5:I5')
+for ref in ('E5', 'E6', 'E7', 'E8', 'E9', 'E10', 'E11', 'H6', 'H7', 'H8', 'H9', 'H10', 'H11'):
+    seletor(gc, ref)
+    gc[ref].font = fonte(bold=True, size=10, color=VERDE_ESC)
+for a_, b_ in (('E9', 'F9'), ('E11', 'F11'), ('H8', 'I8'), ('H9', 'I9'), ('H11', 'I11')):
+    gc.merge_cells(f'{a_}:{b_}')
+gc['E6'], gc['E7'], gc['H6'], gc['H7'] = 'Residencial', 'Caução em dinheiro', 'Locador', 3
+gc['E8'].number_format = F_MOEDA
+gc['H10'].number_format = F_DATA
+gc['D12'] = 'Campos de foro, cidade e data vazios: o contrato usa a cidade do imóvel e deixa a data em branco para preencher à mão.'
+gc['D12'].font = fonte(size=9, italic=True, color=SUAVE)
+# auxiliares
+GQ = lambda col: f'IF($S$2="","",INDEX({rng("Contratos", col, CT)},$S$2))'  # noqa: E731
+IMV = lambda col: f'IF($S$14=0,"",INDEX({rng("Imóveis", col, IM)},$S$14)&"")'  # noqa: E731
+PRP = lambda col: f'IF($S$20=0,"",INDEX({rng("Proprietários", col, PR)},$S$20)&"")'  # noqa: E731
+INQ_ = lambda col: f'IF($S$24=0,"",INDEX({rng("Inquilinos", col, INQ)},$S$24)&"")'  # noqa: E731
+LAC = '__________'
+ou = lambda x: f'IF({x}="","{LAC}",{x})'  # noqa: E731
+aux_gc = {
+    2: f'=IFERROR(MATCH($E$5,{rng("Contratos", "S", CT)},0),"")', 3: f'={GQ("D")}', 4: f'={GQ("E")}', 5: f'={GQ("F")}',
+    6: f'={GQ("G")}', 7: f'={GQ("H")}', 8: f'={GQ("J")}', 9: f'={GQ("K")}', 10: f'={GQ("L")}', 11: f'={GQ("M")}',
+    12: f'=N({GQ("P")})', 13: f'=N({GQ("Q")})', 14: f'=IFERROR(MATCH(S3,{rng("Imóveis", "D", IM)},0),0)',
+    15: f'=IF(S14=0,"",{IMV("F")}&", bairro "&{IMV("G")}&", "&{IMV("H")}&"/"&{IMV("I")}&IF({IMV("J")}="","",", CEP "&{IMV("J")}))',
+    16: f'=IF(S14=0,"",{IMV("H")}&"/"&{IMV("I")})', 17: f'={IMV("L")}', 18: f'=N(IF(S14=0,0,INDEX({rng("Imóveis", "N", IM)},S14)))',
+    19: f'={IMV("K")}', 20: f'=IFERROR(MATCH(S19,{rng("Proprietários", "D", PR)},0),0)',
+    21: (f'=IF(S20=0,"{LAC}, nacionalidade {LAC}, estado civil {LAC}, profissão {LAC}, portador(a) do RG nº {LAC}, inscrito(a) no CPF nº {LAC}, '
+         f'residente e domiciliado(a) à {LAC}",UPPER({PRP("D")})&", "&IF({PRP("G")}="","nacionalidade {LAC}",{PRP("G")})&", "'
+         f'&IF({PRP("H")}="","estado civil {LAC}",LOWER({PRP("H")}))&", "&IF({PRP("I")}="","profissão {LAC}",{PRP("I")})'
+         f'&", portador(a) do RG nº "&{ou(PRP("F"))}&", inscrito(a) no CPF/CNPJ nº "&{ou(PRP("E"))}&", residente e domiciliado(a) à "&{ou(PRP("J"))})'),
+    22: f'={PRP("L")}', 23: f'={PRP("M")}', 24: f'=IFERROR(MATCH(S4,{rng("Inquilinos", "D", INQ)},0),0)',
+    25: (f'=IF(S24=0,"{LAC}",UPPER({INQ_("D")})&", "&IF({INQ_("K")}="","nacionalidade {LAC}",{INQ_("K")})&", "'
+         f'&IF({INQ_("I")}="","estado civil {LAC}",LOWER({INQ_("I")}))&", "&IF({INQ_("J")}="","profissão {LAC}",{INQ_("J")})'
+         f'&", portador(a) do RG nº "&{ou(INQ_("F"))}&" e CPF nº "&{ou(INQ_("E"))}&", telefone "&{ou(INQ_("G"))}'
+         f'&", e-mail "&{ou(INQ_("H"))}&", residente atualmente à "&{ou(INQ_("L"))})'),
+    26: f'={PRP("E")}', 27: f'={INQ_("E")}', 28: f'=IF(N(S8)=0,"",{ext("S8")})', 29: '=IF($H$8<>"",$H$8,IF(S16="","' + LAC + '",S16))',
+    30: '=IF($H$9<>"",$H$9,IF(S16="","' + LAC + '",S16))', 31: f'=IF(N($E$8)=0,"",{ext("$E$8")})', 32: f'=IF(N(S18)=0,"",{ext("S18")})',
+    33: '=OR(S11="IPCA",S11="IGP-M",S11="INPC")', 34: '=IF(S11="IPCA","IPCA/IBGE",IF(S11="IGP-M","IGP-M/FGV",IF(S11="INPC","INPC/IBGE","")))',
+    35: '=$E$6<>"Comercial"', 36: '=LOWER(IF($E$6="","Residencial",$E$6))',
+}
+for k, f in aux_gc.items():
+    gc[f'S{k}'] = f
+for letra in 'RS':
+    gc.column_dimensions[letra].hidden = True
+Sx = lambda n: F(f'$S${n}')  # noqa: E731
+data = lambda ref: F(data_txt(ref))  # noqa: E731
+pctf = lambda ref: F(f'FIXED({ref}*100,IF({ref}*100=INT({ref}*100),0,2))&"%"')  # noqa: E731
+gar = '$E$7'
+doc = []  # (tipo, formula, caracteres estimados)
+def par(*partes, est=200):
+    doc.append(('p', '=' + cat(*partes), est))
+def clausula(n, titulo):
+    doc.append(('c', '=' + cat(f'CLÁUSULA {n}ª – ', titulo) if isinstance(titulo, F) else f'="CLÁUSULA {n}ª – {titulo}"', 40))
+
+doc.append(('t', '="CONTRATO DE LOCAÇÃO DE IMÓVEL "&UPPER(S36)', 40))
+doc.append(('s', '="Lei nº 8.245/1991 (Lei do Inquilinato)"', 40))
+doc.append(('c', '="QUALIFICAÇÃO DAS PARTES"', 30))
+par('LOCADOR: ', Sx(21), '.', est=330)
+par('LOCATÁRIO: ', Sx(25), '.', est=330)
+par('As partes celebram o presente contrato de locação ', Sx(36), ', que será regido pela Lei nº 8.245/1991 e pelas cláusulas abaixo.', est=140)
+clausula(1, 'DO IMÓVEL E DA DESTINAÇÃO')
+par('O LOCADOR entrega em locação ao LOCATÁRIO o imóvel ', Sx(36), ' situado à ', Sx(15), F('IF(S17="","",", objeto da matrícula nº "&S17)'), '.', est=200)
+doc.append(('p', '=IF(S35,' + lit('O imóvel destina-se exclusivamente à moradia do LOCATÁRIO e de sua família, sendo vedada a alteração de finalidade sem autorização prévia e escrita do LOCADOR.') + ','
+            + lit('O imóvel destina-se exclusivamente ao uso comercial do LOCATÁRIO, sendo vedada a alteração de finalidade sem autorização prévia e escrita do LOCADOR.') + ')', 170))
+clausula(2, 'DO PRAZO')
+doc.append(('p', '=IF(N(S6)=0,"A locação é celebrada por prazo indeterminado, com início em "&' + data_txt('S5') + '&".",'
+            '"A locação terá prazo de "&S6&" ("&' + pal('S6') + '&") meses, com início em "&' + data_txt('S5') + '&" e término em "&' + data_txt('S7') + '&".")', 130))
+doc.append(('p', '=IF(NOT(S35),' + lit('Findo o prazo, a prorrogação e a eventual renovação da locação observarão as disposições da Lei nº 8.245/1991 aplicáveis às locações não residenciais, especialmente seus artigos 51 a 57.')
+            + ',IF(N(S6)<30,' + lit('Por se tratar de locação residencial com prazo inferior a 30 (trinta) meses, eventual prorrogação por prazo indeterminado e retomada do imóvel observarão as hipóteses e condições previstas na Lei nº 8.245/1991, especialmente seu artigo 47.')
+            + ',' + lit('Findo o prazo ajustado, se o LOCATÁRIO permanecer no imóvel por mais de 30 (trinta) dias sem oposição do LOCADOR, a locação será prorrogada por prazo indeterminado, nos termos do artigo 46 da Lei nº 8.245/1991.') + '))', 240))
+par('Se as partes desejarem renovar a locação por novo prazo determinado, deverão formalizar o acordo por escrito.', est=110)
+clausula(3, 'DO ALUGUEL, VENCIMENTO E PAGAMENTO')
+par('O aluguel mensal será de R$ ', F('FIXED(S8,2)'), ' (', Sx(28), '), com vencimento todo dia ', Sx(9), ', ',
+    F('IF(S22<>"","mediante PIX para a chave "&S22,IF(S23<>"","mediante depósito ou transferência para "&S23,"mediante ' + LAC + '"))'), ', em nome do LOCADOR.', est=220)
+doc.append(('p', f'=IF({gar}="Sem garantia",' + lit('Como a locação não possui garantia locatícia, as partes poderão ajustar o pagamento do aluguel e encargos até o sexto dia útil do mês vincendo, conforme artigo 42 da Lei nº 8.245/1991.') + ',"")', 180))
+par('Os comprovantes de pagamento servirão como prova do pagamento, sem prejuízo de o LOCADOR fornecer recibo discriminado quando solicitado.', est=140)
+doc.append(('p', '=IF(AND(S12=0,S13=0),"","Em caso de atraso, incidirá "&IF(S12>0,"multa moratória de "&' + pctf('S12') + '&" sobre o valor em atraso","")'
+            '&IF(AND(S12>0,S13>0)," e ","")&IF(S13>0,"juros de mora de "&' + pctf('S13') + '&" ao mês, calculados proporcionalmente aos dias de atraso","")'
+            '&IF(S33,", além de correção monetária pelo "&S11&", se aplicável","")&".")', 230))
+clausula(4, 'DO REAJUSTE')
+doc.append(('p', '=IF(N(S10)=0,' + lit('O valor do aluguel somente será alterado mediante acordo escrito entre as partes, observada a legislação vigente.')
+            + ',IF(S33,"O aluguel será reajustado a cada "&S10&" ("&' + pal('S10') + '&") meses, contados do início da locação, pela variação acumulada do "&S34&" no período. "&'
+            + lit('Caso o índice deixe de existir ou não possa ser utilizado, as partes adotarão outro índice oficial que o substitua. O reajuste deverá respeitar a legislação vigente.')
+            + ',"O aluguel poderá ser reajustado a cada "&S10&" ("&' + pal('S10') + '&") meses, contados do início da locação, em valor definido pelo LOCADOR "&'
+            + lit('e comunicado por escrito ao LOCATÁRIO com antecedência mínima de 30 (trinta) dias. O reajuste deverá respeitar a legislação vigente.') + '))', 300))
+doc.append(('p', '=IF(N(S10)=0,"","O novo valor passará a vigorar a partir do primeiro vencimento seguinte à data do reajuste.")', 100))
+clausula(5, 'DOS ENCARGOS E CONSUMOS')
+par('Durante a locação, serão de responsabilidade do LOCATÁRIO as despesas de consumo individual do imóvel, incluindo água, energia elétrica, gás, internet e outros serviços que contratar ou utilizar.', est=190)
+par('O LOCATÁRIO deverá, quando possível, transferir as contas de consumo para seu nome e manter os pagamentos em dia, apresentando comprovantes quando solicitado.', est=160)
+doc.append(('p', '=IF($H$6="Locatário",' + lit('O IPTU incidente sobre o imóvel durante a locação será de responsabilidade do LOCATÁRIO, e as despesas extraordinárias de propriedade, do LOCADOR. Se houver condomínio, as despesas ordinárias atribuídas legalmente ao LOCATÁRIO serão pagas por ele, e as extraordinárias pelo LOCADOR.')
+            + ',' + lit('Salvo acordo escrito em contrário, o IPTU e despesas extraordinárias de propriedade serão de responsabilidade do LOCADOR. Se houver condomínio, as despesas ordinárias atribuídas legalmente ao LOCATÁRIO serão pagas por ele, e as extraordinárias pelo LOCADOR.') + ')', 290))
+doc.append(('p', '=IF(S18=0,"","A taxa de condomínio ordinária é, nesta data, de aproximadamente R$ "&FIXED(S18,2)&" ("&S32&") por mês, sujeita às alterações aprovadas pelo condomínio.")', 170))
+doc.append(('c', f'="CLÁUSULA 6ª – "&IF({gar}="Caução em dinheiro","DA GARANTIA (CAUÇÃO)",IF({gar}="Fiador","DA GARANTIA (FIANÇA)",IF({gar}="Seguro-fiança","DA GARANTIA","DA AUSÊNCIA DE GARANTIA")))', 40))
+vg = 'IF(N($E$8)>0,"R$ "&FIXED($E$8,2)&" ("&S31&")","R$ ' + LAC + '")'
+doc.append(('p', f'=IF({gar}="Caução em dinheiro","Em garantia das obrigações deste contrato, o LOCATÁRIO entrega ao LOCADOR caução em dinheiro no valor de "&{vg}&"'
+            + ', nos termos do artigo 38 da Lei nº 8.245/1991, que será devolvida ao final da locação, "&'
+            + lit('após a vistoria de saída e a quitação de eventuais débitos, podendo ser utilizada para cobrir valores em aberto.')
+            + f',IF({gar}="Fiador","Assina também este contrato, como FIADOR e principal pagador, "&UPPER({ou("$E$9")})&", inscrito(a) no CPF nº "&{ou("$E$10")}&", "&'
+            + lit('responsável solidariamente por todas as obrigações do LOCATÁRIO até a efetiva entrega das chaves, renunciando aos benefícios dos artigos 827, 835 e 838 do Código Civil.')
+            + f',IF({gar}="Seguro-fiança","A locação é garantida por seguro-fiança"&IF(N($E$8)>0," no valor de "&{vg},"")&", contratado pelo LOCATÁRIO e mantido vigente durante toda a locação.",'
+            + lit('A locação é celebrada sem fiador, caução, seguro-fiança ou outra garantia locatícia.') + ')))', 330))
+par('As partes reconhecem que não está sendo exigida mais de uma modalidade de garantia.', est=90)
+clausula(7, 'DA CONSERVAÇÃO, VISTORIA E BENFEITORIAS')
+for t in ['O LOCATÁRIO declara receber o imóvel em condições de uso, conforme laudo de vistoria e registro fotográfico que, se elaborado, deverá ser anexado a este contrato. A declaração não afasta a responsabilidade do LOCADOR por defeitos preexistentes ou vícios que sejam de sua responsabilidade legal.',
+          'O LOCATÁRIO deverá conservar o imóvel, reparar danos que causar ou que forem causados por seus familiares, visitantes ou prestadores, e devolvê-lo ao final da locação no estado em que o recebeu, ressalvado o desgaste natural decorrente do uso regular.',
+          'Obras ou benfeitorias dependerão de autorização prévia e escrita do LOCADOR. A indenização ou retenção por benfeitorias será tratada conforme a legislação aplicável e eventual acordo escrito entre as partes.',
+          'É vedado sublocar, ceder ou emprestar o imóvel, total ou parcialmente, sem consentimento prévio e escrito do LOCADOR.',
+          'O LOCADOR poderá vistoriar o imóvel mediante prévio agendamento com o LOCATÁRIO, em dia e horário razoáveis.']:
+    par(t, est=len(t))
+clausula(8, 'DA RESCISÃO E MULTA')
+doc.append(('p', '=IF(OR(N($H$7)=0,N(S6)=0),"","Durante o prazo determinado, o LOCATÁRIO poderá devolver o imóvel antes do término, mediante comunicação escrita, ficando sujeito à multa equivalente a "&$H$7&" ("&'
+            + pal('$H$7') + '&") "&IF($H$7=1,"aluguel vigente","aluguéis vigentes")&", "&' + lit('reduzida proporcionalmente ao período já cumprido do contrato, conforme artigo 4º da Lei nº 8.245/1991, salvo hipótese legal de dispensa.') + ')', 310))
+doc.append(('p', '=IF(OR(N($H$7)=0,N(S6)=0),"",' + lit('Para cálculo proporcional, a multa será calculada pela seguinte fórmula: multa integral × (período restante do contrato ÷ prazo total contratado).') + ')', 150))
+par('O LOCATÁRIO deverá, preferencialmente, comunicar a intenção de desocupação com 30 (trinta) dias de antecedência, para organização da vistoria e entrega das chaves.', est=170)
+par('O LOCADOR não poderá reaver o imóvel durante o prazo contratual, salvo nas hipóteses legais. O descumprimento contratual poderá ensejar medidas legais cabíveis, inclusive rescisão e despejo, conforme a lei.', est=210)
+clausula(9, 'DA ENTREGA DAS CHAVES')
+par('A devolução das chaves deverá ser formalizada por escrito, após vistoria de saída. A entrega das chaves não implica quitação automática de valores pendentes, que deverão ser apurados e discriminados.', est=200)
+clausula(10, 'DO FORO')
+par('Fica eleito o foro da Comarca de ', Sx(29), ' para dirimir questões decorrentes deste contrato, ressalvadas as regras legais de competência.', est=150)
+doc.append(('c', '="DISPOSIÇÕES FINAIS"', 30))
+doc.append(('p', f'="E, por estarem de acordo, as partes assinam este instrumento em "&IF({gar}="Fiador","três","duas")&" vias de igual teor, juntamente com duas testemunhas, ou por meio eletrônico que permita comprovar autoria e integridade."', 200))
+doc.append(('d', '=S30&", "&IF($H$10="","____ de ____________________ de ________",DAY($H$10)&" de "&LOWER(INDEX(Listas!$A$2:$A$13,MONTH($H$10)))&" de "&YEAR($H$10))&"."', 60))
+assin = [('LOCADOR', 'UPPER(S19)', 'S26', None), ('LOCATÁRIO', 'UPPER(S4)', 'S27', None), ('FIADOR', f'UPPER({ou("$E$9")})', '$E$10', f'{gar}="Fiador"'),
+         ('TESTEMUNHA 1', f'IF($E$11="","__________________________________________",UPPER($E$11))', '""', None),
+         ('TESTEMUNHA 2', f'IF($H$11="","__________________________________________",UPPER($H$11))', '""', None)]
+G0 = 14
+caixa(gc, f'D{G0}:I{G0 + len(doc) + len(assin) * 4 + 3}')
+for col in 'DEFGHI':
+    gc[f'{col}{G0}'].border = Border(top=Side('thick', color=VERDE_ESC))
+r = G0 + 1
+for tipo, f, est in doc:
+    gc.merge_cells(f'D{r}:I{r}')
+    c = gc[f'D{r}']
+    c.value = f
+    if tipo == 't':
+        c.font, c.alignment = fonte(size=13, bold=True), Alignment(horizontal='center', vertical='center')
+        gc.row_dimensions[r].height = 26
+    elif tipo == 's':
+        c.font, c.alignment = fonte(size=9, color=SUAVE), Alignment(horizontal='center', vertical='top')
+        gc.row_dimensions[r].height = 18
+    elif tipo == 'c':
+        c.font, c.alignment = fonte(size=10, bold=True), Alignment(vertical='bottom', wrap_text=True)
+        gc.row_dimensions[r].height = 24
+    elif tipo == 'd':
+        c.font, c.alignment = fonte(size=10), Alignment(horizontal='right', vertical='center')
+        gc.row_dimensions[r].height = 30
+    else:
+        c.font, c.alignment = fonte(size=10), Alignment(horizontal='justify', vertical='top', wrap_text=True)
+        gc.row_dimensions[r].height = max(15, -(-est // 118) * 13 + 4)
+    r += 1
+r += 1
+for papel, nome, doc_, cond in assin:
+    pre = f'IF({cond},' if cond else ''
+    pos = ',"")' if cond else ''
+    for k, (f, alt) in enumerate([(f'="{papel}: "&{nome}', 18), ('="CPF: "&IF(' + doc_ + '="","______________________________",' + doc_ + ')', 16),
+                                  ('="Assinatura: __________________________________________"', 24)]):
+        gc.merge_cells(f'D{r}:I{r}')
+        gc[f'D{r}'] = '=' + pre + f[1:] + pos if cond else f
+        gc[f'D{r}'].font = fonte(size=10, bold=(k == 0))
+        gc[f'D{r}'].alignment = Alignment(vertical='bottom')
+        gc.row_dimensions[r].height = alt
+        r += 1
+    r += 1
+fim_doc = r
+layout(gc, 'Gerar contrato', 'Gerar contrato', 'Escolha o contrato e preencha as opções. O contrato abaixo sai pronto para imprimir (Arquivo → Imprimir).', fim_doc + 2, 11, cabecalhos=False)
+caixa(gc, f'D{G0 + 1}:I{fim_doc}')
+for ref in ('E5', 'E6', 'E7', 'E8', 'E9', 'E10', 'E11', 'H6', 'H7', 'H8', 'H9', 'H10', 'H11'):
+    seletor(gc, ref)
+    gc[ref].font = fonte(bold=True, size=10, color=VERDE_ESC)
+gc['E8'].number_format = F_MOEDA
+gc['H10'].number_format = F_DATA
+for col in 'DEFGHI':
+    gc[f'{col}{G0}'].fill = PatternFill('solid', fgColor=VERDE_ESC)
+gc.row_dimensions[G0].height = 6
+gc.print_area = f'D{G0 + 1}:I{fim_doc}'
+gc.page_setup.orientation = 'portrait'
+gc.page_setup.fitToWidth = 1
+gc.page_setup.fitToHeight = 0
+gc.sheet_properties.pageSetUpPr.fitToPage = True
+destravar(gc, 'E5:I5', 'E6', 'E7', 'E8', 'E9:F9', 'E10', 'E11:F11', 'H6', 'H7', 'H8:I8', 'H9:I9', 'H10', 'H11:I11')
+proteger(gc)
+
 # ----------------------------------------------------------------- Painel (dashboard)
 pn = wb.create_sheet('Painel', 0)
 layout(pn, 'Painel', 'Painel', 'Resumo do mês escolhido, atrasos e avisos.', 48, 20, cabecalhos=False)
@@ -782,7 +1162,7 @@ CARDS = [
     (7, 'H', '✅', 'RECEBIDO', f'=SUM({AMR("H")})', f'=COUNTIF({AMR("K")},"Pago")&" pago(s)"', VERDE_OK, F_MOEDA),
     (7, 'L', '⏳', 'FALTA RECEBER', f'=SUM({AMR("V")})', f'=COUNTIF({AMR("K")},"Em aberto")+COUNTIF({AMR("K")},"Parcial")&" a vencer"', LARANJA, F_MOEDA),
     (7, 'P', '❌', 'ATRASADOS NO MÊS', f'=SUMIF({AMR("K")},"Atrasado",{AMR("V")})', f'=COUNTIF({AMR("K")},"Atrasado")&" atrasado(s)"', VERMELHO, F_MOEDA),
-    (13, 'D', '⚠️', 'EM ABERTO (TODOS OS MESES)', f'=SUM({rng("Contratos", "U", CT)})', f'=COUNTIF({rng("Contratos", "U", CT)},">0")&" contrato(s) devendo"', VERMELHO, F_MOEDA),
+    (13, 'D', '⚠️', 'EM ABERTO (TODOS OS MESES)', f'=SUM({rng("Contratos", "V", CT)})', f'=COUNTIF({rng("Contratos", "V", CT)},">0")&" contrato(s) devendo"', VERMELHO, F_MOEDA),
     (13, 'H', '💸', 'DESPESAS DO MÊS', f'={desp_mes}', '="lançadas na aba Despesas"', ROXO, F_MOEDA),
     (13, 'L', '📈', 'RESULTADO DO MÊS', f'=SUM({AMR("H")})-{desp_mes}', '="recebido − despesas"', VERDE_ESC, F_MOEDA),
     (13, 'P', '🏠', 'OCUPAÇÃO', f'=IFERROR(COUNTIF({rng("Imóveis", "O", IM)},"Alugado")/COUNTA({rng("Imóveis", "D", IM)}),0)',
@@ -819,8 +1199,14 @@ for k in range(12):
     r = 2 + k
     ini, fim = f'EDATE({INI},{k - 11})', f'EOMONTH({INI},{k - 11})'
     ls[f'M{r}'] = f'=INDEX($B$2:$B$13,MONTH({ini}))&"/"&RIGHT(YEAR({ini}),2)'
-    ls[f'N{r}'] = (f'=SUMPRODUCT(({rng("Contratos", "R", CT)}<>"")*({rng("Contratos", "F", CT)}<>"")*({rng("Contratos", "F", CT)}<={fim})'
-                   f'*((({rng("Contratos", "Q", CT)}="")+({rng("Contratos", "Q", CT)}>={ini}))>0)*{rng("Contratos", "I", CT)})')
+    colg = L_(27 + k)
+    ls[f'N{r}'] = f'=SUM(Listas!${colg}$2:${colg}${1 + n_ct})'
+    for i in range(n_ct):
+        c = CT[0] + i
+        CC = lambda col: f"{q('Contratos')}!${col}${c}"  # noqa: E731
+        venc = f'DATE(YEAR({ini}),MONTH({ini}),MIN(N({CC("K")})+(N({CC("K")})=0),DAY({fim})))'
+        ativo = f'AND({CC("S")}<>"",{CC("F")}<>"",{CC("F")}<={fim},OR({CC("R")}="",{CC("R")}>={ini}))'
+        ls[f'{colg}{2 + i}'] = f'=IF({ativo},{valor_em(CC("S"), venc, f"N({CC(chr(73))})")},0)'
     ls[f'O{r}'] = f'=SUMIFS({rng("Pagamentos", "G", PG)},{rng("Pagamentos", "F", PG)},">="&{ini},{rng("Pagamentos", "F", PG)},"<="&{fim})'
 ls['Q1'], ls['R1'] = 'Parte', 'Valor'
 ls['Q2'], ls['R2'] = 'Recebido', f'=SUM({AMR("H")})'
@@ -891,9 +1277,9 @@ for k in range(5):
         pn.merge_cells(faixa)
     pn[f'D{r}'] = f'=IF({t}="",IF({k}=0,"Ninguém devendo 🎉",""),INDEX({rng("Contratos", "E", CT)},{t}))'
     pn[f'G{r}'] = f'=IF({t}="","",INDEX({rng("Contratos", "D", CT)},{t}))'
-    pn[f'I{r}'] = f'=IF({t}="","",INDEX({rng("Contratos", "U", CT)},{t}))'
+    pn[f'I{r}'] = f'=IF({t}="","",INDEX({rng("Contratos", "V", CT)},{t}))'
     pn[f'L{r}'] = f'=IF({u}="",IF({k}=0,"Nenhum aviso no momento",""),INDEX({rng("Contratos", "E", CT)},{u}))'
-    pn[f'O{r}'] = f'=IF({u}="","",INDEX({rng("Contratos", "T", CT)},{u}))'
+    pn[f'O{r}'] = f'=IF({u}="","",INDEX({rng("Contratos", "U", CT)},{u}))'
     pn[f'I{r}'].number_format = F_MOEDA
     for col in 'DEFGHIJLMNOPQR':
         pn[f'{col}{r}'].fill = PatternFill('solid', fgColor=BRANCO)
@@ -903,7 +1289,7 @@ for k in range(5):
         pn[ref].font = f
         pn[ref].alignment = Alignment(vertical='center', indent=1)
 pn['D42'] = f'=HYPERLINK("#{q("Em aberto")}!A1","Ver todos os valores em aberto →")'
-pn['L42'] = f'=HYPERLINK("#{q("Contratos")}!T8","Ver os contratos →")'
+pn['L42'] = f'=HYPERLINK("#{q("Contratos")}!U8","Ver os contratos →")'
 for ref in ('D42', 'L42'):
     pn[ref].font = fonte(size=9, bold=True, color=VERDE, underline='single')
 pn['D45'] = 'Os dados que vêm preenchidos são EXEMPLOS: apague-os antes de usar (veja ❓ Como usar).'
@@ -937,11 +1323,17 @@ passos = [
     ('9', 'Extrato do inquilino: escolha o contrato e o ano e veja mês a mês o que foi pago.', 'Extrato'),
     ('10', 'Despesas: lance IPTU, condomínio, manutenção… e marque se é dedutível no Imposto de Renda.', 'Despesas'),
     ('11', 'Recibo: escolha o contrato e o mês e imprima ou salve em PDF (com o valor por extenso).', 'Recibo'),
-    ('12', 'Relatório IR: escolha o ano (e o proprietário, se quiser) para ver o carnê-leão mês a mês e o resultado por imóvel.', 'Relatório IR'),
+    ('12', 'Calcular reajuste: escolha o contrato e digite a variação do índice (ex.: IPCA 4,66%). Sai o novo valor e a carta de reajuste '
+           'para imprimir. Depois, lance o reajuste na aba Reajustes.', 'Calcular reajuste'),
+    ('13', 'Reajustes: o histórico de todos os reajustes. O novo valor passa a valer sozinho a partir do vencimento seguinte, e os meses '
+           'anteriores continuam com o valor antigo.', 'Reajustes'),
+    ('14', 'Gerar contrato: escolha o contrato, a finalidade, a garantia e as opções. O contrato de locação completo sai pronto para '
+           'imprimir e assinar. Para sair completo, preencha RG, nacionalidade, estado civil, profissão e endereço nos cadastros.', 'Gerar contrato'),
+    ('15', 'Relatório IR: escolha o ano (e o proprietário, se quiser) para ver o carnê-leão mês a mês e o resultado por imóvel.', 'Relatório IR'),
     ('', 'BOM SABER', None),
     ('•', 'Encerrou uma locação? Em Contratos, preencha a "Data de saída". O histórico continua guardado.', None),
-    ('•', 'Reajustou o aluguel? Altere o valor no contrato e preencha a data do "Último reajuste". O saldo em aberto passa a contar a partir '
-          'do reajuste, e o "previsto" de meses antigos passa a mostrar o valor novo (os pagamentos lançados não mudam).', None),
+    ('•', 'Reajustou o aluguel? Não mude o "Valor inicial" do contrato: lance o reajuste na aba Reajustes. Assim o histórico fica certo.', None),
+    ('•', 'O contrato gerado é um modelo de apoio: revise as cláusulas para o seu caso (de preferência com um advogado) antes de assinar.', None),
     ('•', 'Não troque o nome de um imóvel ou inquilino que já tem pagamentos: os pagamentos são ligados ao nome do contrato.', None),
     ('•', 'Funciona no Excel (Windows e Mac), no Excel do celular e no Google Planilhas, sem macros. No Google Planilhas, '
           'os links do menu lateral podem não funcionar: use as abas na parte de baixo da tela.', None),
@@ -986,7 +1378,9 @@ def mes_antes(n):
     return date(y, m, 1)
 
 
-pr['D8'], pr['E8'], pr['F8'], pr['G8'] = 'Proprietário Exemplo', '000.000.000-00', '(00) 00000-0000', 'CPF 000.000.000-00'
+for col, v in zip('DEFGHIJKL', ('Proprietário Exemplo', '000.000.000-00', '0000000 SSP/PR', 'brasileiro', 'Casado(a)', 'comerciante',
+                                  'Rua Exemplo, 1 - Centro - Cidade Exemplo/PR', '(00) 00000-0000', 'CPF 000.000.000-00')):
+    pr[f'{col}8'] = v
 for i, (nome, tipo, end, iptu) in enumerate([('Casa Exemplo', 'Casa', 'Rua Exemplo, 100', 1200), ('Apto Exemplo', 'Apartamento', 'Avenida Exemplo, 200', 900),
                                              ('Sala Exemplo', 'Sala comercial', 'Rua Exemplo B, 300', 1500), ('Kitnet Exemplo', 'Kitnet', 'Rua Exemplo C, 400', 400)]):
     r = 8 + i
@@ -994,14 +1388,18 @@ for i, (nome, tipo, end, iptu) in enumerate([('Casa Exemplo', 'Casa', 'Rua Exemp
         im[f'{col}{r}'] = v
 for i, nome in enumerate(['Inquilina Exemplo Ana', 'Inquilino Exemplo Bruno', 'Inquilina Exemplo Carla']):
     r = 8 + i
-    iq[f'D{r}'], iq[f'E{r}'], iq[f'F{r}'], iq[f'I{r}'], iq[f'J{r}'] = nome, '000.000.000-00', '0000000', 'Solteiro(a)', 'Exemplo'
+    iq[f'D{r}'], iq[f'E{r}'], iq[f'F{r}'], iq[f'I{r}'], iq[f'J{r}'] = nome, '000.000.000-00', '0000000 SSP/PR', 'Solteiro(a)', 'professor(a)'
+    iq[f'K{r}'] = 'brasileira' if 'Inquilina' in nome else 'brasileiro'
 contratos = [('Casa Exemplo', 'Inquilina Exemplo Ana', mes_antes(10), 30, 1500, 5),
              ('Apto Exemplo', 'Inquilino Exemplo Bruno', mes_antes(23), 30, 2200, 10),
              ('Sala Exemplo', 'Inquilina Exemplo Carla', mes_antes(4), 36, 3200, 30)]
 for i, (imv, inq, ini, prazo, valor, dia) in enumerate(contratos):
     r = 8 + i
     ct[f'D{r}'], ct[f'E{r}'], ct[f'F{r}'], ct[f'G{r}'] = imv, inq, ini, prazo
-    ct[f'I{r}'], ct[f'J{r}'], ct[f'K{r}'], ct[f'L{r}'], ct[f'O{r}'], ct[f'P{r}'] = valor, dia, 12, 'IPCA', 0.02, 0.01
+    ct[f'I{r}'], ct[f'K{r}'], ct[f'L{r}'], ct[f'M{r}'], ct[f'P{r}'], ct[f'Q{r}'] = valor, dia, 12, 'IPCA', 0.02, 0.01
+# um reajuste no histórico: o contrato do Bruno fez 1 ano e passou de R$ 2.200,00 para R$ 2.299,00 (IPCA 4,5%)
+data_reaj = mes_antes(11)
+rj['D8'], rj['E8'], rj['F8'], rj['G8'], rj['H8'] = data_reaj, 'Apto Exemplo | Inquilino Exemplo Bruno', 'IPCA', 0.045, 2299
 # Pagamentos: todos os meses desde o início, menos o mês passado do Bruno (fica em aberto) e o mês atual dos dois últimos.
 lin = 8
 for i, (imv, inq, ini, prazo, valor, dia) in enumerate(contratos):
@@ -1015,7 +1413,7 @@ for i, (imv, inq, ini, prazo, valor, dia) in enumerate(contratos):
         pg[f'D{lin}'] = date(ref.year, ref.month, min(dia, ultimo))
         pg[f'E{lin}'] = f'{imv} | {inq}'
         pg[f'F{lin}'] = ref
-        pg[f'G{lin}'] = valor
+        pg[f'G{lin}'] = 2299 if (i == 1 and ref >= data_reaj) else valor
         pg[f'J{lin}'] = 'PIX'
         lin += 1
 for i, (d, imv, cat, desc, val, ded) in enumerate([
@@ -1026,14 +1424,20 @@ for i, (d, imv, cat, desc, val, ded) in enumerate([
     for col, v in zip('DEFGHI', (d, imv, cat, desc, val, ded)):
         dp[f'{col}{r}'] = v
 rc['E5'] = 'Casa Exemplo | Inquilina Exemplo Ana'
+cr['E5'] = 'Casa Exemplo | Inquilina Exemplo Ana'
+cr['E7'] = 0.0466
+gc['E5'] = 'Casa Exemplo | Inquilina Exemplo Ana'
+gc['E8'] = 4500
 rc['E6'] = mes_antes(1)
 ex['E5'] = 'Apto Exemplo | Inquilino Exemplo Bruno'
 
 # ================================================================= ordem, cores e gravação
 ordem = ['Painel', 'Como usar', 'Aluguéis do Mês', 'Em aberto', 'Extrato', 'Pagamentos', 'Contratos', 'Imóveis', 'Inquilinos',
-         'Proprietários', 'Despesas', 'Relatório IR', 'Recibo', 'Listas']
+         'Proprietários', 'Reajustes', 'Calcular reajuste', 'Gerar contrato', 'Despesas', 'Relatório IR', 'Recibo', 'Listas']
+ordem = [n for n in ordem if n in wb.sheetnames]
+assert len(ordem) == len(wb.sheetnames), set(wb.sheetnames) - set(ordem)
 wb._sheets = [wb[n] for n in ordem]
-cores = {'Painel': VERDE_ESC, 'Como usar': 'FACC15', 'Aluguéis do Mês': VERDE, 'Em aberto': VERMELHO, 'Extrato': VERDE,
+cores = {'Reajustes': LARANJA, 'Calcular reajuste': LARANJA, 'Gerar contrato': AZUL, 'Painel': VERDE_ESC, 'Como usar': 'FACC15', 'Aluguéis do Mês': VERDE, 'Em aberto': VERMELHO, 'Extrato': VERDE,
          'Pagamentos': VERDE, 'Relatório IR': ROXO, 'Recibo': ROXO, 'Despesas': VERMELHO}
 for ws in wb.worksheets:
     ws.sheet_properties.tabColor = cores.get(ws.title, '64748B')
