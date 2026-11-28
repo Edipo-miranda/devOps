@@ -1,8 +1,10 @@
 """Gera a planilha "Controle de Aluguéis" (Excel, só fórmulas, sem macros) com visual de sistema.
 
-Uso:  python3 planilha/gerar_planilha.py   ->  planilha/Controle-de-Alugueis.xlsx
+Uso:  python3 planilha/gerar_planilha.py           ->  planilha/Controle-de-Alugueis-EXEMPLO.xlsx
+      python3 planilha/gerar_planilha.py --vazia   ->  planilha/Controle-de-Alugueis-EM-BRANCO.xlsx
 Os dados de exemplo são fictícios (CPF e telefone zerados) e devem ser apagados pelo cliente.
 """
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -19,7 +21,9 @@ from openpyxl.worksheet.protection import SheetProtection
 from openpyxl.utils import get_column_letter as L_
 
 PASTA = Path(__file__).parent
-SAIDA = PASTA / 'Controle-de-Alugueis.xlsx'
+VERSAO = '1.0'
+VAZIA = '--vazia' in sys.argv  # versão em branco (sem dados de exemplo)
+SAIDA = PASTA / ('Controle-de-Alugueis-EM-BRANCO.xlsx' if VAZIA else 'Controle-de-Alugueis-EXEMPLO.xlsx')
 LOGO = PASTA / 'logo-planilha.png'
 FONTE = 'Arial'
 
@@ -257,9 +261,11 @@ def layout(ws, ativo, titulo, subtitulo, ultima_linha, ultima_col=20, cabecalhos
         c.alignment = Alignment(vertical='center', indent=1)
         if ativo_:
             c.fill = PatternFill('solid', fgColor=VERDE)
-    ws[f'B{8 + len(MENU)}'] = 'Planilha Controle de Aluguéis'
-    ws[f'B{8 + len(MENU)}'].font = fonte(size=8, color='475569')
-    ws[f'B{8 + len(MENU)}'].alignment = Alignment(indent=1)
+    ws[f'B{8 + len(MENU)}'] = f'Controle de Aluguéis · versão {VERSAO}'
+    ws[f'B{9 + len(MENU)}'] = '="Licenciado para: "&IF(Painel!$P$3="","—",Painel!$P$3)'
+    for k in (8, 9):
+        ws[f'B{k + len(MENU)}'].font = fonte(size=8, color='64748B')
+        ws[f'B{k + len(MENU)}'].alignment = Alignment(indent=1)
     ws['D2'] = titulo
     ws['D2'].font = fonte(size=20, bold=True)
     ws['D2'].alignment = Alignment(vertical='center')
@@ -622,7 +628,7 @@ for col, w in zip('DEFGHIJ', [16, 13, 13, 13, 13, 5, 12]):
     ex.column_dimensions[col].width = w
 for letra in 'RS':
     ex.column_dimensions[letra].hidden = True
-ex['R1'] = f'=IFERROR(MATCH($E$5,{rng("Contratos", "S", CT)},0),"")'
+ex['R1'] = f'=IF($E$5="","",IFERROR(MATCH($E$5,{rng("Contratos", "S", CT)},0),""))'
 P = lambda col: f'IF($R$1="","",INDEX({rng("Contratos", col, CT)},$R$1))'  # noqa: E731
 caixa(ex, 'D8:J12')
 info = [('D8', 'INQUILINO', f'={P("E")}', 'D9'), ('G8', 'IMÓVEL', f'={P("D")}', 'G9'),
@@ -756,7 +762,7 @@ rc['F6'] = 'digite assim: 11/2026'
 rc['F6'].font = fonte(size=9, italic=True, color=SUAVE)
 lista(rc, rng('Contratos', 'R', CT), 'E5')
 aux = {
-    'pos': f'=MATCH($E$5,{rng("Contratos", "S", CT)},0)',
+    'pos': f'=IF($E$5="","",IFERROR(MATCH($E$5,{rng("Contratos", "S", CT)},0),""))',
     'imovel': f'=IFERROR(INDEX({rng("Contratos", "D", CT)},S2),"")',
     'inq': f'=IFERROR(INDEX({rng("Contratos", "E", CT)},S2),"")',
     'cpf': f'=IFERROR(INDEX({rng("Inquilinos", "E", INQ)},MATCH(S4,{rng("Inquilinos", "D", INQ)},0))&"","")',
@@ -841,7 +847,7 @@ lista(cr, rng('Contratos', 'S', CT), 'E5', 'Escolha um contrato da aba Contratos
 lista(cr, col_lista['indices'], 'E6')
 cr['E7'].number_format = F_PCT
 cr['E8'].number_format = F_DATA
-cr['S1'] = f'=IFERROR(MATCH($E$5,{rng("Contratos", "S", CT)},0),"")'
+cr['S1'] = f'=IF($E$5="","",IFERROR(MATCH($E$5,{rng("Contratos", "S", CT)},0),""))'
 Q_ = lambda col: f'IF($S$1="","",INDEX({rng("Contratos", col, CT)},$S$1))'  # noqa: E731
 cr['E6'] = f'={Q_("M")}'
 cr['E8'] = f'={Q_("O")}'
@@ -967,7 +973,7 @@ INQ_ = lambda col: f'IF($S$24=0,"",INDEX({rng("Inquilinos", col, INQ)},$S$24)&""
 LAC = '__________'
 ou = lambda x: f'IF({x}="","{LAC}",{x})'  # noqa: E731
 aux_gc = {
-    2: f'=IFERROR(MATCH($E$5,{rng("Contratos", "S", CT)},0),"")', 3: f'={GQ("D")}', 4: f'={GQ("E")}', 5: f'={GQ("F")}',
+    2: f'=IF($E$5="","",IFERROR(MATCH($E$5,{rng("Contratos", "S", CT)},0),""))', 3: f'={GQ("D")}', 4: f'={GQ("E")}', 5: f'={GQ("F")}',
     6: f'={GQ("G")}', 7: f'={GQ("H")}', 8: f'={GQ("J")}', 9: f'={GQ("K")}', 10: f'={GQ("L")}', 11: f'={GQ("M")}',
     12: f'=N({GQ("P")})', 13: f'=N({GQ("Q")})', 14: f'=IFERROR(MATCH(S3,{rng("Imóveis", "D", IM)},0),0)',
     15: f'=IF(S14=0,"",{IMV("F")}&", bairro "&{IMV("G")}&", "&{IMV("H")}&"/"&{IMV("I")}&IF({IMV("J")}="","",", CEP "&{IMV("J")}))',
@@ -995,6 +1001,7 @@ Sx = lambda n: F(f'$S${n}')  # noqa: E731
 data = lambda ref: F(data_txt(ref))  # noqa: E731
 pctf = lambda ref: F(f'FIXED({ref}*100,IF({ref}*100=INT({ref}*100),0,2))&"%"')  # noqa: E731
 gar = '$E$7'
+dtx = lambda ref: f'IF({ref}="","____/____/______",{data_txt(ref)})'  # noqa: E731
 doc = []  # (tipo, formula, caracteres estimados)
 def par(*partes, est=200):
     doc.append(('p', '=' + cat(*partes), est))
@@ -1012,14 +1019,14 @@ par('O LOCADOR entrega em locação ao LOCATÁRIO o imóvel ', Sx(36), ' situado
 doc.append(('p', '=IF(S35,' + lit('O imóvel destina-se exclusivamente à moradia do LOCATÁRIO e de sua família, sendo vedada a alteração de finalidade sem autorização prévia e escrita do LOCADOR.') + ','
             + lit('O imóvel destina-se exclusivamente ao uso comercial do LOCATÁRIO, sendo vedada a alteração de finalidade sem autorização prévia e escrita do LOCADOR.') + ')', 170))
 clausula(2, 'DO PRAZO')
-doc.append(('p', '=IF(N(S6)=0,"A locação é celebrada por prazo indeterminado, com início em "&' + data_txt('S5') + '&".",'
-            '"A locação terá prazo de "&S6&" ("&' + pal('S6') + '&") meses, com início em "&' + data_txt('S5') + '&" e término em "&' + data_txt('S7') + '&".")', 130))
+doc.append(('p', '=IF(N(S6)=0,"A locação é celebrada por prazo indeterminado, com início em "&' + dtx('S5') + '&".",'
+            '"A locação terá prazo de "&S6&" ("&' + pal('S6') + '&") meses, com início em "&' + dtx('S5') + '&" e término em "&' + dtx('S7') + '&".")', 130))
 doc.append(('p', '=IF(NOT(S35),' + lit('Findo o prazo, a prorrogação e a eventual renovação da locação observarão as disposições da Lei nº 8.245/1991 aplicáveis às locações não residenciais, especialmente seus artigos 51 a 57.')
             + ',IF(N(S6)<30,' + lit('Por se tratar de locação residencial com prazo inferior a 30 (trinta) meses, eventual prorrogação por prazo indeterminado e retomada do imóvel observarão as hipóteses e condições previstas na Lei nº 8.245/1991, especialmente seu artigo 47.')
             + ',' + lit('Findo o prazo ajustado, se o LOCATÁRIO permanecer no imóvel por mais de 30 (trinta) dias sem oposição do LOCADOR, a locação será prorrogada por prazo indeterminado, nos termos do artigo 46 da Lei nº 8.245/1991.') + '))', 240))
 par('Se as partes desejarem renovar a locação por novo prazo determinado, deverão formalizar o acordo por escrito.', est=110)
 clausula(3, 'DO ALUGUEL, VENCIMENTO E PAGAMENTO')
-par('O aluguel mensal será de R$ ', F('FIXED(S8,2)'), ' (', Sx(28), '), com vencimento todo dia ', Sx(9), ', ',
+par('O aluguel mensal será de R$ ', F('IF(N(S8)=0,"' + LAC + '",FIXED(S8,2))'), ' (', Sx(28), '), com vencimento todo dia ', Sx(9), ', ',
     F('IF(S22<>"","mediante PIX para a chave "&S22,IF(S23<>"","mediante depósito ou transferência para "&S23,"mediante ' + LAC + '"))'), ', em nome do LOCADOR.', est=220)
 doc.append(('p', f'=IF({gar}="Sem garantia",' + lit('Como a locação não possui garantia locatícia, as partes poderão ajustar o pagamento do aluguel e encargos até o sexto dia útil do mês vincendo, conforme artigo 42 da Lei nº 8.245/1991.') + ',"")', 180))
 par('Os comprovantes de pagamento servirão como prova do pagamento, sem prejuízo de o LOCADOR fornecer recibo discriminado quando solicitado.', est=140)
@@ -1292,9 +1299,16 @@ pn['D42'] = f'=HYPERLINK("#{q("Em aberto")}!A1","Ver todos os valores em aberto 
 pn['L42'] = f'=HYPERLINK("#{q("Contratos")}!U8","Ver os contratos →")'
 for ref in ('D42', 'L42'):
     pn[ref].font = fonte(size=9, bold=True, color=VERDE, underline='single')
-pn['D45'] = 'Os dados que vêm preenchidos são EXEMPLOS: apague-os antes de usar (veja ❓ Como usar).'
+pn['D45'] = ('Primeira vez? Comece pela aba ❓ Como usar.' if VAZIA else
+             'Os dados que vêm preenchidos são EXEMPLOS: apague-os antes de usar (ou use o arquivo EM BRANCO).')
+pn['P2'] = 'LICENCIADO PARA'
+pn['P2'].font = fonte(size=8, bold=True, color=SUAVE)
+pn['P2'].alignment = Alignment(vertical='bottom')
+pn.merge_cells('P3:R3')
+seletor(pn, 'P3')
+pn['P3'].font = fonte(bold=True, size=10, color=VERDE_ESC)
 pn['D45'].font = fonte(size=8, italic=True, color=SUAVE)
-destravar(pn, 'E5:F5', 'H5')
+destravar(pn, 'E5:F5', 'H5', 'P3:R3')
 proteger(pn)
 
 # ----------------------------------------------------------------- Como usar
@@ -1431,6 +1445,17 @@ gc['E8'] = 4500
 rc['E6'] = mes_antes(1)
 ex['E5'] = 'Apto Exemplo | Inquilino Exemplo Bruno'
 
+if VAZIA:  # tira os exemplos: deixa só a estrutura e as fórmulas
+    entradas = {pr: ('DEFGHIJKLMN', PR), im: ('DEFGHIJKLMN', IM), iq: ('DEFGHIJKLM', INQ), ct: ('DEFGIKLMPQR', CT),
+                pg: ('DEFGHJK', PG), dp: ('DEFGHI', DP), rj: ('DEFGH', RJ)}
+    for ws, (cols, faixa) in entradas.items():
+        for col in cols:
+            for r in range(faixa[0], faixa[1] + 1):
+                ws[f'{col}{r}'].value = None
+    for ws, refs in ((rc, ('E5', 'E6')), (cr, ('E5', 'E7')), (gc, ('E5', 'E8')), (ex, ('E5',))):
+        for ref in refs:
+            ws[ref].value = None
+
 # ================================================================= ordem, cores e gravação
 ordem = ['Painel', 'Como usar', 'Aluguéis do Mês', 'Em aberto', 'Extrato', 'Pagamentos', 'Contratos', 'Imóveis', 'Inquilinos',
          'Proprietários', 'Reajustes', 'Calcular reajuste', 'Gerar contrato', 'Despesas', 'Relatório IR', 'Recibo', 'Listas']
@@ -1443,5 +1468,7 @@ for ws in wb.worksheets:
     ws.sheet_properties.tabColor = cores.get(ws.title, '64748B')
     ws.sheet_view.zoomScale = 100
 wb.active = 0
+from openpyxl.workbook.properties import CalcProperties  # noqa: E402
+wb.calculation = CalcProperties(fullCalcOnLoad=True)  # o Excel recalcula tudo ao abrir
 wb.save(SAIDA)
 print('ok', SAIDA)
